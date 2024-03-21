@@ -7,7 +7,7 @@ function widget:GetInfo()
         license = "GPL v3",
         layer = 0,    
         enabled = true,
-        version = "1.0"  --I may later add functioanlity to the option menu.
+        version = "1.1"  --I may later add functioanlity to the option menu.
     }
 end
 
@@ -18,6 +18,18 @@ local interval_to_check = 30 -- how many game ticks for a check for idle removal
 
 local is_play = false
 local idles = {}
+
+
+function get_idx(tab, val)
+    local idx = nil
+    for i,v in ipairs(tab) do
+        if (v == val) then
+            idx = i
+            break
+    end end
+    return idx
+end
+
 
 function widget:Initialize()
     for _, v in pairs(exlude_names) do exlude_names[v] = true end -- setup for check
@@ -42,6 +54,13 @@ function widget:UnitIdle(uID, uDefID, uClan)
     table.insert(idles, unit)
 end
 
+function widget:UnitDestroyed(uID, uDefID, uClan)
+    if uClan == Spring.GetMyTeamID() then 
+        idx = get_idx(idles, uID)
+        if idx ~= nil then table.remove(idles, idx) end
+    end
+end
+
 function widget:KeyPress(key, mods, isRepeating)
     if key == 97 and mods.alt then -- a+alt
         if #idles < 1 then return end
@@ -55,7 +74,9 @@ end end
 function widget:GameFrame(tick)
     if math.fmod(tick, interval_to_check) == 0 then 
         for i=#idles,1,-1 do --checks if idle no longer are idle, removes element and marker
-            if Spring.GetUnitCommands(idles[i]["uID"], 0) > 0 then
-                Spring.MarkerErasePosition(idles[i]["x"], idles[i]["y"], idles[i]["z"])
-                table.remove(idles, i)
-end end end end
+            cmds = Spring.GetUnitCommands(idles[i]["uID"], 0)
+            if cmds ~= nil then
+                if cmds > 0 then
+                    Spring.MarkerErasePosition(idles[i]["x"], idles[i]["y"], idles[i]["z"])
+                    table.remove(idles, i)
+end end end end end
