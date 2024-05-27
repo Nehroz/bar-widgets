@@ -1,27 +1,28 @@
-local widget_name = "Idle Constructor Notifiaction"
+local widget_name = "Idle Constructor Notification"
 
 function widget:GetInfo()
     return {
         name = widget_name,
-        desc = "Audio queue and ping on idle cons appearing. alt+a move camera to latest idle and selects it until it's no longer idling; This will keep selecting idles in the same order as they appeared.",
+        desc = "Audio queue and ping on idle cons appearing. `select_latest_idle_unit` moves the camera to the latest idle unit and selects it; This will keep selecting idles in the same order as they appeared.",
         author = "Nehroz",
         date = "2024.3.x",
         license = "GPL v3",
-        layer = 0,    
+        layer = 0,
         enabled = true,
+        handler = true,
         version = "1.2"
     }
 end
 
-local audio_queue = "Sounds/movement/arm-bot-at-sel.wav"  -- sound player with ping, to differtiate audio queue.
+local audio_queue = "Sounds/movement/arm-bot-at-sel.wav"  -- sound player with ping, to differentiate audio queue.
 local exclude_names = {} -- excluded units that count as mobile builders.
-local interval_to_check = 30 -- how many game ticks for a check for idle removal.
-local time_out_minimal = 20 -- frames needed for a inuit to be recognized as idle.
+local interval_to_check = 30 -- how many game ticks per idle removal check.
+local time_out_minimal = 20 -- number of frames before a unit is considered idle.
 local grouping_radius = 200
-local regresive_collect = true -- if on will collect nearby idles that are not yet timed out as well and group them.
-local include_com = false -- flag if commader's are detected.
-local include_rez = false -- flag if rez bot's are detected.
-local include_comando = false -- flag if commandos are detected.
+local regresive_collect = true -- collect nearby idles that are not yet timed out and group them.
+local include_com = false -- detect commanders.
+local include_rez = false -- detect rezbots.
+local include_comando = false -- detect commandos.
 
 local is_play = false
 local idles_timingout = {}
@@ -35,7 +36,7 @@ function get_idx(tab, uID) -- figures out index of a unit with uID
         if (v["uID"] == uID) then
             idx = i
             break
-        end 
+        end
     end
     return idx
 end
@@ -48,7 +49,7 @@ function union(t1, t2)
 end
 function has_value(t, v)
     for i,tv in ipairs(t) do
-        if v == tv then return true end 
+        if v == tv then return true end
     end
     return false
 end
@@ -57,12 +58,12 @@ function still_idle(uID)
     cmds = Spring.GetUnitCommands(uID, 0)
     if cmds == nil then return nil end
     if cmds > 0 then return false
-    else return true end 
+    else return true end
 end
 
 function ping_unit(x, y, z, text)
     Spring.PlaySoundFile(audio_queue, 0.75, 'ui')
-    Spring.MarkerAddPoint(x, y, z, text, true) --def.translatedHumanName 
+    Spring.MarkerAddPoint(x, y, z, text, true) --def.translatedHumanName
 end
 
 function exclution_generator()
@@ -72,7 +73,7 @@ function exclution_generator()
         table.insert(t, "armcom")
         table.insert(t, "corcom")
     end
-    if include_rez == false then 
+    if include_rez == false then
         table.insert(t, "armrectr")
         table.insert(t, "cornecro")
     end
@@ -91,7 +92,20 @@ function widget:Initialize()
     add_options()
     exclution_generator()
     widget:Update()
-    Spring.Echo("Idle notificaiton loaded.")
+    Spring.Echo("Idle notification loaded.")
+
+    widgetHandler.actionHandler:AddAction(self, "select_latest_idle_unit", select_latest_idle_unit, nil, "p")
+end
+
+function select_latest_idle_unit()
+    if #idles < 1 then return end
+    local grp = idles[#idles]
+    local pu = grp[1]
+    Spring.SetCameraTarget(pu["x"], pu["y"], pu["z"], 0.5)
+    --Spring.MarkerErasePosition(pu["x"], pu["y"], pu["z"])
+    local sgrp = {}
+    for i=#grp,1,-1 do table.insert(sgrp, grp[i]["uID"]) end
+    Spring.SelectUnitArray(sgrp)
 end
 
 function widget:Update()
@@ -100,7 +114,7 @@ end
 
 function widget:UnitIdle(uID, uDefID, uClan)
     if is_play ~= false then return end
-    if Spring.GetUnitIsDead(uID) ~= false then return end --supress idle detection on dead units.
+    if Spring.GetUnitIsDead(uID) ~= false then return end -- suppress idle detection on dead units.
     if uClan ~= Spring.GetMyTeamID() then return end -- check if it's your unit before further checks.
     def = UnitDefs[uDefID]
     if def.isMobileBuilder == false or has_value(exclude_names, def.name) then return end -- mobile builder + exlude units
@@ -113,41 +127,27 @@ end
 
 
 function widget:UnitDestroyed(uID, uDefID, uClan)
-    if uClan == Spring.GetMyTeamID() then 
+    if uClan == Spring.GetMyTeamID() then
         if is_play ~= false then return end
         def = UnitDefs[uDefID]
         if def.isMobileBuilder == false or has_value(exclude_names, def.name) then return end
         idx = get_idx(idles_timingout, uID)
-        if idx ~= nil then 
+        if idx ~= nil then
             table.remove(idles_timingout, idx)
             return
         end
         for i=#idles,1,-1 do
             idx = get_idx(idles[i], uID)
             if idx ~= nil then
-                Spring.Echo("Delted" .. tostring(uID))
+                Spring.Echo("Deleted" .. tostring(uID))
                 Spring.MarkerErasePosition(idles[i][idx]["x"], idles[i][idx]["y"], idles[i][idx]["z"])
                 table.remove(idles[i], idx)
-                if #idles[i] < 1 then table.remove(idles, i) end -- clena up empty table
-                return            
+                if #idles[i] < 1 then table.remove(idles, i) end -- clean up empty table
+                return
             end
         end
     end
 end
-
-function widget:KeyPress(key, mods, isRepeating)
-    if key == 97 and mods.alt then -- a+alt
-        if #idles < 1 then return end
-        grp = idles[#idles]
-        pu = grp[1]
-        Spring.SetCameraTarget(pu["x"], pu["y"], pu["z"], 0.5)
-        --Spring.MarkerErasePosition(pu["x"], pu["y"], pu["z"])
-        sgrp = {}
-        for i=#grp,1,-1 do table.insert(sgrp, grp[i]["uID"]) end
-        Spring.SelectUnitArray(sgrp)
-    end 
-end
-
 
 function find_nearby(t_collector, t_search, unit)
     for i = #t_search, 1, -1 do
@@ -166,13 +166,13 @@ function collect_nearby(t) -- will collect all idles nearby out of both lists, m
     table.remove(t, 1)
     if regresive_collect then
         i = 1
-        while i <= #collection do 
+        while i <= #collection do
             find_nearby(collection, idles_timingout, collection[i])
             i = i +1
         end
     end
     i = 1
-    while i <= #collection do 
+    while i <= #collection do
         find_nearby(collection, t, collection[i])
         i = i +1
     end
@@ -181,9 +181,9 @@ end
 
 
 function widget:GameFrame(tick)
-    if math.fmod(tick, interval_to_check) == 0 then 
+    if math.fmod(tick, interval_to_check) == 0 then
         --checks if idle no longer are idle, removes element and marker
-        for i=#idles,1,-1 do 
+        for i=#idles,1,-1 do
             for j=#idles[i], 1, -1 do
                 if still_idle(idles[i][j]["uID"]) == false then
                     Spring.MarkerErasePosition(idles[i][j]["x"], idles[i][j]["y"], idles[i][j]["z"])
@@ -217,7 +217,7 @@ function widget:GameFrame(tick)
             ping_unit(pu["x"], pu["y"], pu["z"], str.. UnitDefs[pu["uDefID"]].translatedHumanName .. "!")
             table.insert(idles, grp)
         end
-    end 
+    end
 end
 
 
@@ -241,8 +241,8 @@ function add_options()
         table.insert(t, op)
         op = {
             widgetname = widget_name,
-            name = "Idle time out",
-            description = "Specify many frames (60 per s) a con needs to be idle before being processed and pinged. Importent for grouping out of synch going idle units ex: after group move, so more likely grouping. Trade-off is a longer time until warning of the idle.",
+            name = "Timeout",
+            description = "The threshold in frames (60Hz) for a unit to be considered idle. This increases the likelihood of grouping for units moving out of sync. Trade-off is a longer time before warning of the idle.",
             id = "idle_timer",
             value = time_out_minimal,
             type = "slider",
@@ -256,8 +256,8 @@ function add_options()
         table.insert(t, op)
         op = {
             widgetname = widget_name,
-            name = "Idle grouping radius",
-            description = "Select range used to detect nearby idles to be grouped up into one selection and ping.",
+            name = "Grouping radius",
+            description = "The range used to detect nearby idles for grouping.",
             id = "idle_radius",
             value = grouping_radius,
             type = "slider",
@@ -271,8 +271,8 @@ function add_options()
         table.insert(t, op)
         op = {
             widgetname = widget_name,
-            name = "Idle grouping fresh cons too",
-            description = "Allows the script to collect not yet timmed out and fresh idling units to be grouped up.",
+            name = "Group non-idle units",
+            description = "Add nearby non-idle units when grouping.",
             id = "idle_regresive",
             value = regresive_collect,
             type = "bool",
@@ -283,8 +283,8 @@ function add_options()
         table.insert(t, op)
         op = {
             widgetname = widget_name,
-            name = "Idle includes Commanders",
-            description = "Will also idle warn for commanders.",
+            name = "Include commanders",
+            description = "Warnings for commanders.",
             id = "idle_com",
             value = idle_com,
             type = "bool",
@@ -296,8 +296,8 @@ function add_options()
         table.insert(t, op)
         op = {
             widgetname = widget_name,
-            name = "Idle includes rezbots",
-            description = "Will also pop idle warnings on rezbots.",
+            name = "Include rezbots",
+            description = "Warnings for rezbots.",
             id = "idle_rez",
             value = idle_rez,
             type = "bool",
@@ -309,8 +309,8 @@ function add_options()
         table.insert(t, op)
         op = {
             widgetname = widget_name,
-            name = "Idle includes comando",
-            description = "Will also pop idle warnings on rezbots.",
+            name = "Include comandos",
+            description = "Warnings for commandos.",
             id = "idle_comando",
             value = idle_comando,
             type = "bool",
