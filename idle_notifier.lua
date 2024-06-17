@@ -9,7 +9,7 @@ function widget:GetInfo()
         license = "GPL v3",
         layer = 0,    
         enabled = true,
-        version = "1.2"
+        version = "1.2b"
     }
 end
 
@@ -28,8 +28,10 @@ local idles_timingout = {}
 local idles = {}
 
 
-function vec_len(x,y,z) return math.sqrt(x*x+y*y+z*z) end -- simple vector math
-function get_idx(tab, uID) -- figures out index of a unit with uID
+local function vec_len(x,y,z) -- simple vector math, gives length
+    return math.sqrt(x*x+y*y+z*z)
+end
+local function get_idx(tab, uID) -- figures out index of a unit with uID
     local idx = nil
     for i,v in ipairs(tab) do
         if (v["uID"] == uID) then
@@ -39,189 +41,21 @@ function get_idx(tab, uID) -- figures out index of a unit with uID
     end
     return idx
 end
-function union(t1, t2)
+local function union(t1, t2) -- executes a union between two tables
     new = {}
     for i=1,#t1 do new[i] = t1[i] end
     offset = #new
     for i=1,#t2 do new[i+offset] = t2[i] end
     return new
 end
-function has_value(t, v)
+local function has_value(t, v) -- checks if table has a value
     for i,tv in ipairs(t) do
         if v == tv then return true end 
     end
     return false
 end
 
-function still_idle(uID)
-    cmds = Spring.GetUnitCommands(uID, 0)
-    if cmds == nil then return nil end
-    if cmds > 0 then return false
-    else return true end 
-end
-
-function ping_unit(x, y, z, text)
-    Spring.PlaySoundFile(audio_queue, 0.75, 'ui')
-    Spring.MarkerAddPoint(x, y, z, text, true) --def.translatedHumanName 
-end
-
-function exclution_generator()
-    Spring.Echo(tostring(include_com) .. " .. " .. tostring(include_rez))
-    t = {}
-    if include_com == false then
-        table.insert(t, "armcom")
-        table.insert(t, "corcom")
-    end
-    if include_rez == false then 
-        table.insert(t, "armrectr")
-        table.insert(t, "cornecro")
-    end
-    if include_comando == false then
-        table.insert(t, "cormando")
-    end
-    exclude_names = t
-
-    str = ""
-    for _, v in pairs(t) do str = str .. tostring(v) end
-    Spring.Echo(str)
-end
-
-
-function widget:Initialize()
-    add_options()
-    exclution_generator()
-    widget:Update()
-    Spring.Echo("Idle notificaiton loaded.")
-end
-
-function widget:Update()
-    is_play = Spring.GetSpectatingState()
-end
-
-function widget:UnitIdle(uID, uDefID, uClan)
-    if is_play ~= false then return end
-    if Spring.GetUnitIsDead(uID) ~= false then return end --supress idle detection on dead units.
-    if uClan ~= Spring.GetMyTeamID() then return end -- check if it's your unit before further checks.
-    def = UnitDefs[uDefID]
-    if def.isMobileBuilder == false or has_value(exclude_names, def.name) then return end -- mobile builder + exlude units
-    x, y, z = Spring.GetUnitPosition(uID)
-    t, _ = Spring.GetGameFrame()
-    unit = {["x"] = x, ["y"] = y, ["z"] = z, ["uID"] = uID, ["uDefID"] = uDefID, ["time"] = t}
-    table.insert(idles_timingout, unit)
-end
-
-
-
-function widget:UnitDestroyed(uID, uDefID, uClan)
-    if uClan == Spring.GetMyTeamID() then 
-        if is_play ~= false then return end
-        def = UnitDefs[uDefID]
-        if def.isMobileBuilder == false or has_value(exclude_names, def.name) then return end
-        idx = get_idx(idles_timingout, uID)
-        if idx ~= nil then 
-            table.remove(idles_timingout, idx)
-            return
-        end
-        for i=#idles,1,-1 do
-            idx = get_idx(idles[i], uID)
-            if idx ~= nil then
-                Spring.Echo("Delted" .. tostring(uID))
-                Spring.MarkerErasePosition(idles[i][idx]["x"], idles[i][idx]["y"], idles[i][idx]["z"])
-                table.remove(idles[i], idx)
-                if #idles[i] < 1 then table.remove(idles, i) end -- clena up empty table
-                return            
-            end
-        end
-    end
-end
-
-function widget:KeyPress(key, mods, isRepeating)
-    if key == 97 and mods.alt then -- a+alt
-        if #idles < 1 then return end
-        grp = idles[#idles]
-        pu = grp[1]
-        Spring.SetCameraTarget(pu["x"], pu["y"], pu["z"], 0.5)
-        --Spring.MarkerErasePosition(pu["x"], pu["y"], pu["z"])
-        sgrp = {}
-        for i=#grp,1,-1 do table.insert(sgrp, grp[i]["uID"]) end
-        Spring.SelectUnitArray(sgrp)
-    end 
-end
-
-
-function find_nearby(t_collector, t_search, unit)
-    for i = #t_search, 1, -1 do
-        if unit["uDefID"] == t_search[i]["uDefID"] then --identiy check
-            if vec_len(unit["x"]-t_search[i]["x"], unit["y"]-t_search[i]["y"], unit["z"]-t_search[i]["z"]) < grouping_radius then
-                table.insert(t_collector, t_search[i])
-                table.remove(t_search, i)
-            end
-        end
-    end
-end
-
-
-function collect_nearby(t) -- will collect all idles nearby out of both lists, mergeing nearby idles.
-    collection = {t[1]}
-    table.remove(t, 1)
-    if regresive_collect then
-        i = 1
-        while i <= #collection do 
-            find_nearby(collection, idles_timingout, collection[i])
-            i = i +1
-        end
-    end
-    i = 1
-    while i <= #collection do 
-        find_nearby(collection, t, collection[i])
-        i = i +1
-    end
-    return collection
-end
-
-
-function widget:GameFrame(tick)
-    if math.fmod(tick, interval_to_check) == 0 then 
-        --checks if idle no longer are idle, removes element and marker
-        for i=#idles,1,-1 do 
-            for j=#idles[i], 1, -1 do
-                if still_idle(idles[i][j]["uID"]) == false then
-                    Spring.MarkerErasePosition(idles[i][j]["x"], idles[i][j]["y"], idles[i][j]["z"])
-                    table.remove(idles[i], j)
-                end
-            end
-            if #idles[i] < 1 then
-                table.remove(idles, i)
-            end
-        end
-
-        -- processing time outs
-        t = {}
-        for i = #idles_timingout,1,-1 do
-            if still_idle(idles_timingout[i]["uID"]) == true then
-                if tick - idles_timingout[i]["time"] >= time_out_minimal then
-                    table.insert(t, idles_timingout[i])
-                    table.remove(idles_timingout, i)
-                end
-            else
-                table.remove(idles_timingout, i)
-            end
-        end
-        while #t > 0 do
-            grp = collect_nearby(t)
-            pu = grp[1]
-            str = "Idle "
-            if #grp > 1 then
-                str = str .. tostring(#grp) .. "x "
-            end
-            ping_unit(pu["x"], pu["y"], pu["z"], str.. UnitDefs[pu["uDefID"]].translatedHumanName .. "!")
-            table.insert(idles, grp)
-        end
-    end 
-end
-
-
-function add_options()
+local function add_options() -- constructs options and adds them to the settings menu -- ! warning, if widget is reloaded repetility it bugs out the order.
     if WG["options"] then
         t = {}
         op = {
@@ -324,19 +158,178 @@ function add_options()
     end
 end
 
-
-function del_options()
+local function del_options() -- deletes all options from settings mmenu
     if WG["options"] then
         WG["options"].removeOptions({"idle_ticker", "idle_timer", "idle_radius", "idle_regresive", "idle_com", "idle_rez", "idle_comando"})
     end
 end
 
+local function find_nearby(t_collector, t_search, unit)
+    for i = #t_search, 1, -1 do
+        if unit["uDefID"] == t_search[i]["uDefID"] then --identiy check
+            if vec_len(unit["x"]-t_search[i]["x"], unit["y"]-t_search[i]["y"], unit["z"]-t_search[i]["z"]) < grouping_radius then
+                table.insert(t_collector, t_search[i])
+                table.remove(t_search, i)
+            end
+        end
+    end
+end
 
-function widget:Shutdown()
+local function collect_nearby(t) -- will collect all idles nearby out of both lists, mergeing nearby idles.
+    collection = {t[1]}
+    table.remove(t, 1)
+    if regresive_collect then
+        i = 1
+        while i <= #collection do 
+            find_nearby(collection, idles_timingout, collection[i])
+            i = i +1
+        end
+    end
+    i = 1
+    while i <= #collection do 
+        find_nearby(collection, t, collection[i])
+        i = i +1
+    end
+    return collection
+end
+
+local function still_idle(uID)
+    cmds = Spring.GetUnitCommands(uID, 0)
+    if cmds == nil then return nil end
+    if cmds > 0 then return false
+    else return true end 
+end
+
+local function ping_unit(x, y, z, text)
+    Spring.PlaySoundFile(audio_queue, 0.75, 'ui')
+    Spring.MarkerAddPoint(x, y, z, text, true) --def.translatedHumanName 
+end
+
+local function exclution_generator()
+    Spring.Echo(tostring(include_com) .. " .. " .. tostring(include_rez))
+    t = {}
+    if include_com == false then
+        table.insert(t, "armcom")
+        table.insert(t, "corcom")
+    end
+    if include_rez == false then 
+        table.insert(t, "armrectr")
+        table.insert(t, "cornecro")
+    end
+    if include_comando == false then
+        table.insert(t, "cormando")
+    end
+    exclude_names = t
+
+    str = ""
+    for _, v in pairs(t) do str = str .. tostring(v) end
+    Spring.Echo(str)
+end
+
+function widget:Initialize()
+    add_options()
+    exclution_generator()
+    widget:Update()
+    Spring.Echo("Idle notificaiton loaded.")
+end
+
+function widget:Update()
+    is_play = Spring.GetSpectatingState()
+end
+
+function widget:UnitIdle(uID, uDefID, uClan)
+    if is_play ~= false then return end
+    if Spring.GetUnitIsDead(uID) ~= false then return end --supress idle detection on dead units.
+    if uClan ~= Spring.GetMyTeamID() then return end -- check if it's your unit before further checks.
+    def = UnitDefs[uDefID]
+    if def.isMobileBuilder == false or has_value(exclude_names, def.name) then return end -- mobile builder + exlude units
+    x, y, z = Spring.GetUnitPosition(uID)
+    t, _ = Spring.GetGameFrame()
+    unit = {["x"] = x, ["y"] = y, ["z"] = z, ["uID"] = uID, ["uDefID"] = uDefID, ["time"] = t}
+    table.insert(idles_timingout, unit)
+end
+
+function widget:UnitDestroyed(uID, uDefID, uClan)
+    if uClan == Spring.GetMyTeamID() then 
+        if is_play ~= false then return end
+        def = UnitDefs[uDefID]
+        if def.isMobileBuilder == false or has_value(exclude_names, def.name) then return end
+        idx = get_idx(idles_timingout, uID)
+        if idx ~= nil then 
+            table.remove(idles_timingout, idx)
+            return
+        end
+        for i=#idles,1,-1 do
+            idx = get_idx(idles[i], uID)
+            if idx ~= nil then
+                Spring.Echo("Delted" .. tostring(uID))
+                Spring.MarkerErasePosition(idles[i][idx]["x"], idles[i][idx]["y"], idles[i][idx]["z"])
+                table.remove(idles[i], idx)
+                if #idles[i] < 1 then table.remove(idles, i) end -- clena up empty table
+                return            
+            end
+        end
+    end
+end
+
+function widget:KeyPress(key, mods, isRepeating)
+    if key == 97 and mods.alt then -- a+alt
+        if #idles < 1 then return end
+        grp = idles[#idles]
+        pu = grp[1]
+        Spring.SetCameraTarget(pu["x"], pu["y"], pu["z"], 0.5)
+        --Spring.MarkerErasePosition(pu["x"], pu["y"], pu["z"])
+        sgrp = {}
+        for i=#grp,1,-1 do table.insert(sgrp, grp[i]["uID"]) end
+        Spring.SelectUnitArray(sgrp)
+    end 
+end
+
+function widget:GameFrame(tick)
+    if math.fmod(tick, interval_to_check) == 0 then 
+        --checks if idle no longer are idle, removes element and marker
+        for i=#idles,1,-1 do 
+            for j=#idles[i], 1, -1 do
+                if still_idle(idles[i][j]["uID"]) == false then
+                    Spring.MarkerErasePosition(idles[i][j]["x"], idles[i][j]["y"], idles[i][j]["z"])
+                    table.remove(idles[i], j)
+                end
+            end
+            if #idles[i] < 1 then
+                table.remove(idles, i)
+            end
+        end
+
+        -- processing time outs
+        t = {}
+        for i = #idles_timingout,1,-1 do
+            if still_idle(idles_timingout[i]["uID"]) == true then
+                if tick - idles_timingout[i]["time"] >= time_out_minimal then
+                    table.insert(t, idles_timingout[i])
+                    table.remove(idles_timingout, i)
+                end
+            else
+                table.remove(idles_timingout, i)
+            end
+        end
+        while #t > 0 do
+            grp = collect_nearby(t)
+            pu = grp[1]
+            str = "Idle "
+            if #grp > 1 then
+                str = str .. tostring(#grp) .. "x "
+            end
+            ping_unit(pu["x"], pu["y"], pu["z"], str.. UnitDefs[pu["uDefID"]].translatedHumanName .. "!")
+            table.insert(idles, grp)
+        end
+    end 
+end
+
+function widget:Shutdown() --removes options
     del_options()
 end
 
-function widget:GetConfigData()
+function widget:GetConfigData() -- Retrevies settings on load.
     data = {}
     data.interval = interval_to_check
     data.timer = time_out_minimal
@@ -347,7 +340,8 @@ function widget:GetConfigData()
     data.comando = include_comando
     return data
 end
-function widget:SetConfigData(data)
+
+function widget:SetConfigData(data) -- Stores settings to be recovered.
     if data.interval then interval_to_check = data.interval end
     if data.timer then time_out_minimal = data.timer end
     if data.radius then grouping_radius = data.radius end
