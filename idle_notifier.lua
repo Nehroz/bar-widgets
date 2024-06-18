@@ -13,7 +13,9 @@ function widget:GetInfo()
     }
 end
 
-local audio_queue = "Sounds/movement/arm-bot-at-sel.wav"  -- sound player with ping, to differtiate audio queue.
+local audio_queue = "LuaUI/Widgets/pipo.ogg"  -- sound player with ping, to differtiate audio queue.
+local warning_audio = "LuaUI/Widgets/arere.ogg" -- sound played if idles are still idle.
+local audio_volume = 0.85 -- how loud the audio queues should be
 local exclude_names = {} -- excluded units that count as mobile builders.
 local interval_to_check = 30 -- how many game ticks for a check for idle removal.
 local time_out_minimal = 20 -- frames needed for a inuit to be recognized as idle.
@@ -22,10 +24,12 @@ local regresive_collect = true -- if on will collect nearby idles that are not y
 local include_com = false -- flag if commader's are detected.
 local include_rez = false -- flag if rez bot's are detected.
 local include_comando = false -- flag if commandos are detected.
+local use_ping = true -- flag if using default game ping (only you can see this).
 
 local is_play = false
 local idles_timingout = {}
 local idles = {}
+local idles_not_being_processed = 0
 
 
 local function vec_len(x,y,z) -- simple vector math, gives length
@@ -117,6 +121,18 @@ local function add_options() -- constructs options and adds them to the settings
         table.insert(t, op)
         op = {
             widgetname = widget_name,
+            name = "Use a ping",
+            description = "Will fire off a ping at location, else pops a chat message to you.",
+            id = "message_type",
+            value = use_ping,
+            type = "bool",
+            onchange = function(i,v)
+                use_ping = v
+            end
+        }
+        table.insert(t, op)
+        op = {
+            widgetname = widget_name,
             name = "Idle includes Commanders",
             description = "Will also idle warn for commanders.",
             id = "idle_com",
@@ -160,7 +176,7 @@ end
 
 local function del_options() -- deletes all options from settings mmenu
     if WG["options"] then
-        WG["options"].removeOptions({"idle_ticker", "idle_timer", "idle_radius", "idle_regresive", "idle_com", "idle_rez", "idle_comando"})
+        WG["options"].removeOptions({"idle_ticker", "idle_timer", "idle_radius", "message_type", "idle_regresive", "message_type", "idle_com", "idle_rez", "idle_comando"})
     end
 end
 
@@ -201,12 +217,16 @@ local function still_idle(uID)
 end
 
 local function ping_unit(x, y, z, text)
-    Spring.PlaySoundFile(audio_queue, 0.75, 'ui')
-    Spring.MarkerAddPoint(x, y, z, text, true) --def.translatedHumanName 
+    Spring.PlaySoundFile(audio_queue, audio_volume, 'ui')
+    if use_ping then
+        Spring.MarkerAddPoint(x, y, z, text, true) --def.translatedHumanName
+    else
+        Spring.SendMessageToPlayer(Spring.GetMyPlayerID(), text)
+    end
 end
 
 local function exclution_generator()
-    Spring.Echo(tostring(include_com) .. " .. " .. tostring(include_rez))
+    --Spring.Echo(tostring(include_com) .. " .. " .. tostring(include_rez))
     t = {}
     if include_com == false then
         table.insert(t, "armcom")
@@ -223,10 +243,14 @@ local function exclution_generator()
 
     str = ""
     for _, v in pairs(t) do str = str .. tostring(v) end
-    Spring.Echo(str)
+    --Spring.Echo(str)
 end
 
 function widget:Initialize()
+    -- check if file exists else use default spidy sounds.
+    if VFS.FileExists("LuaUI/Widgets/pipo.ogg") == false then
+        audio_queue = "Sounds/movement/arm-bot-at-sel.wav"
+    end
     add_options()
     exclution_generator()
     widget:Update()
@@ -262,8 +286,10 @@ function widget:UnitDestroyed(uID, uDefID, uClan)
         for i=#idles,1,-1 do
             idx = get_idx(idles[i], uID)
             if idx ~= nil then
-                Spring.Echo("Delted" .. tostring(uID))
-                Spring.MarkerErasePosition(idles[i][idx]["x"], idles[i][idx]["y"], idles[i][idx]["z"])
+                --Spring.Echo("Delted" .. tostring(uID))
+                if use_ping then
+                    Spring.MarkerErasePosition(idles[i][idx]["x"], idles[i][idx]["y"], idles[i][idx]["z"])
+                end
                 table.remove(idles[i], idx)
                 if #idles[i] < 1 then table.remove(idles, i) end -- clena up empty table
                 return            
@@ -291,15 +317,21 @@ function widget:GameFrame(tick)
         for i=#idles,1,-1 do 
             for j=#idles[i], 1, -1 do
                 if still_idle(idles[i][j]["uID"]) == false then
-                    Spring.MarkerErasePosition(idles[i][j]["x"], idles[i][j]["y"], idles[i][j]["z"])
+                    if use_ping then
+                        Spring.MarkerErasePosition(idles[i][j]["x"], idles[i][j]["y"], idles[i][j]["z"])
+                    end
                     table.remove(idles[i], j)
+                else
+                    idles_not_being_processed = idles_not_being_processed +1
                 end
             end
             if #idles[i] < 1 then
                 table.remove(idles, i)
             end
         end
-
+        if #idles == 0 then
+            idles_not_being_processed = 0
+        end
         -- processing time outs
         t = {}
         for i = #idles_timingout,1,-1 do
@@ -322,7 +354,13 @@ function widget:GameFrame(tick)
             ping_unit(pu["x"], pu["y"], pu["z"], str.. UnitDefs[pu["uDefID"]].translatedHumanName .. "!")
             table.insert(idles, grp)
         end
-    end 
+    end
+    -- play idler still idling sound
+    if math.fmod(tick, interval_to_check*10) == 0 then
+        if idles_not_being_processed >= 50 then -- DEV -- add this in as a settings variable
+            Spring.PlaySoundFile(warning_audio, audio_volume, 'ui')
+        end
+    end
 end
 
 function widget:Shutdown() --removes options
@@ -335,6 +373,7 @@ function widget:GetConfigData() -- Retrevies settings on load.
     data.timer = time_out_minimal
     data.radius = grouping_radius
     data.regresive = regresive_collect
+    data.use_ping = use_ping
     data.com = include_com
     data.rez = include_rez
     data.comando = include_comando
@@ -346,6 +385,7 @@ function widget:SetConfigData(data) -- Stores settings to be recovered.
     if data.timer then time_out_minimal = data.timer end
     if data.radius then grouping_radius = data.radius end
     if data.regresive then regresive_collect = data.regresive end
+    if data.use_ping then use_ping = data.use_ping end
     if data.com then include_com = data.com end
     if data.rez then include_rez = data.rez end
     if data.comando then include_comando = data.comando end
