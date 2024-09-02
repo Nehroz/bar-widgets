@@ -59,7 +59,7 @@ local function dump_table(t) -- converts table to string
             if type(v) == "table" then
                 v = dump_table(v)
             end
-            s = s .. tostring(v) .. ", "
+            s = s .. "[" .. tostring(k) .. "] = " .. tostring(v) .. ", "
         end
         s = "{" .. s .. "}"
         return s
@@ -235,10 +235,10 @@ local function add_options() -- constructs options and adds them to the settings
             name = "Idle includes comando",
             description = "Will also pop idle warnings on rezbots.",
             id = "Idle_Comando",
-            value = Idle_Comando,
+            value = include_comando,
             type = "bool",
             onchange = function(i,v)
-                Idle_Comando = v
+                include_comando = v
                 Exclution_Generator()
             end
         }
@@ -283,6 +283,7 @@ local function collect_nearby(t) -- will collect all idles nearby out of both li
 end
 
 local function still_idle(uID, type) -- checks if unit is still idle, returns true if unit has no commands (nil if error)
+    if Spring.GetUnitHealth(uID) <= 0 then return false end  -- dead units are well dead, needed because aircraft doesn't trigger "isDead" while falling from sky.
     local cmds = 0
     if type == 0 then
       cmds = Spring.GetUnitCommands(uID, 0)
@@ -538,20 +539,20 @@ function widget:GetConfigData() -- Retrevies settings on load.
     data.use_ping = use_ping
     data.com = include_com
     data.rez = include_rez
-    data.comando = include_comando
-    data.factory_idle = factory_idle
+    data.spezial = include_comando
+    data.factory = factory_idle
     return data
 end
 
 function widget:SetConfigData(data) -- Stores settings to be recovered.
-    if data.interval then interval_to_check = data.interval end
-    if data.still then still_idle_warning = data.still end
-    if data.timer then time_out_minimal = data.timer end
-    if data.radius then grouping_radius = data.radius end
-    if data.regresive then regresive_collect = data.regresive end
-    if data.use_ping then use_ping = data.use_ping end
-    if data.com then include_com = data.com end
-    if data.rez then include_rez = data.rez end
-    if data.comando then include_comando = data.comando end
-    if data.factory_idle then factory_idle = data.factory_idle end
+    if data.interval ~= nil then interval_to_check = data.interval end
+    if data.still ~= nil then still_idle_warning = data.still end
+    if data.timer ~= nil then time_out_minimal = data.timer end
+    if data.radius ~= nil then grouping_radius = data.radius end
+    if data.regresive ~= nil then regresive_collect = data.regresive end
+    if data.use_ping ~= nil then use_ping = data.use_ping end
+    if data.com ~= nil then include_com = data.com end
+    if data.rez ~= nil then include_rez = data.rez end
+    if data.spezial ~= nil then include_comando = data.spezial end
+    if data.factory ~= nil then factory_idle = data.factory end
 end
