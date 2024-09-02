@@ -25,7 +25,7 @@ local include_comando = false -- flag if commandos are detected.
 local use_ping = true -- flag if using default game ping (only you, the player, can see this).
 
 local widget_name = "Idle Constructor Notifiaction"
-local widget_version = "1.4a"
+local widget_version = "1.4b"
 function widget:GetInfo()
     return {
         name = widget_name,
