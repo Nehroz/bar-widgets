@@ -17,7 +17,7 @@ local interval_to_check = 10 -- how many game ticks for a check for idle removal
 local audio_timer = 20 -- how many ticks have to pass before a new audio bit can be played; To avoid spamming.
 local still_idle_warning = 120 -- factor of interval_to_check, will start secundary warn sound.
 local still_idle_repeat = 120 -- factor of interval_to_check between secundary warn sounds.
-local time_out_minimal = 30 -- frames needed for a inuit to be recognized as idle.
+local time_out_minimal = 90 -- frames needed for a inuit to be recognized as idle.
 local grouping_radius = 200 -- radius in which idles will be grouped; only applies if the unit is the same unit type.
 local regresive_collect = true -- if on will collect nearby idles within grouping_radius that are not yet timed out and group them as one package.
 local include_com = false -- flag if commader's are detected.
@@ -158,12 +158,12 @@ local function add_options() -- constructs options and adds them to the settings
         op = {
             widgetname = widget_name,
             name = "Idle timeout",
-            description = "Specify many frames (60 per s) a con needs to be idle before being processed and pinged. Importent for grouping out of synch going idle units ex: after group move, so more likely grouping. Trade-off is a longer time until warning of the idle.",
+            description = "Specify many frames (30 per s) a con needs to be idle before being processed and pinged. Importent for grouping out of synch going idle units ex: after group move, so more likely grouping. Trade-off is a longer time until warning of the idle.",
             id = "Idle_Timer",
             value = time_out_minimal,
             type = "slider",
             min = 5,
-            max = 120,
+            max = 300,
             step = 5,
             onchange = function(i,v)
                 time_out_minimal = v
@@ -301,12 +301,15 @@ local function collect_nearby(t) -- will collect all idles nearby out of both li
     return collection
 end
 
-local function still_idle(uID, type) -- checks if unit is still idle, returns true if unit has no commands (nil if error)
-    if Spring.GetUnitHealth(uID) <= 0 then return false end  -- dead units are well dead, needed because aircraft doesn't trigger "isDead" while falling from sky.
+local function still_idle(uID, _type) -- checks if unit is still idle, returns true if unit has no commands (nil if error)
+    local hp = Spring.GetUnitHealth(uID)
+    if type(hp) == "number" then -- in case of nil
+        if Spring.GetUnitHealth(uID) <= 0 then return false end  -- dead units are well dead, needed because aircraft doesn't trigger "isDead" while falling from sky.
+    end
     local cmds = 0
-    if type == 0 then
+    if _type == 0 then
       cmds = Spring.GetUnitCommands(uID, 0)
-    elseif type == 1 then
+    elseif _type == 1 then
       cmds = Spring.GetFactoryCommands(uID, 0)
     end
     if cmds == nil then return nil end
@@ -525,7 +528,6 @@ function widget:GameFrame(tick)
             end
         end
         -- !SECTION
-        print("idle:" .. tostring(#idles) .. " / " .. tostring(#idle_factoies))
         if #idles == 0 and #idle_factoies == 0 then
             idles_not_being_processed = 0
             first_warn = true
@@ -535,7 +537,6 @@ function widget:GameFrame(tick)
     end
     -- play idler still idling sound
     if math.fmod(tick, interval_to_check) == 0 then
-        print("warn:" .. tostring(idles_not_being_processed) .. " / " .. tostring(time_since_last_warning))
         if idles_not_being_processed >= still_idle_warning then -- checks if threshold is reached
             if first_warn == true then -- ensure it warns ones
                 time_since_last_warning = still_idle_repeat
@@ -544,7 +545,6 @@ function widget:GameFrame(tick)
             end
         end
         if time_since_last_warning >= still_idle_repeat then -- checks if enough time has passed since last warning
-            print("waring on " .. tostring(time_since_last_warning))
             local sound_bit = warning_audio[math.random(1,#warning_audio)]
             local played = play_sound(sound_bit)
             if played then
