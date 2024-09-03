@@ -10,17 +10,19 @@ local rez_warning = "LuaUI/Widgets/Sounds/idling_rezbot.wav" -- sound played whe
 local fac_warning = "LuaUI/Widgets/Sounds/idle_lab.wav" -- sound played when idle is a Factory
 local substitution_audio = "Sounds/movement/arm-bot-at-sel.wav" -- internal sound used when files missing.
 
+-- game has 30 ticks per second, as example if you want something to play every 3 seconds, set it to 3*30 = 90
 local audio_volume = 0.85 -- how loud the audio queues should be
 local allways_exclude_names = {"corvacct"} -- excluded units that count as mobile builders. (corvacct is the turret inside the printer, it's not the printer itself!)
-local interval_to_check = 30 -- how many game ticks for a check for idle removal.
+local interval_to_check = 10 -- how many game ticks for a check for idle removal. (30 = 1 second)
 local audio_timer = 20 -- how many ticks have to pass before a new audio bit can be played; To avoid spamming.
-local still_idle_warning = 200 -- factor of interval_to_check, will start secundary warn sound.
-local time_out_minimal = 20 -- frames needed for a inuit to be recognized as idle.
+local still_idle_warning = 120 -- factor of interval_to_check, will start secundary warn sound.
+local still_idle_repeat = 120 -- factor of interval_to_check between secundary warn sounds.
+local time_out_minimal = 30 -- frames needed for a inuit to be recognized as idle.
 local grouping_radius = 200 -- radius in which idles will be grouped; only applies if the unit is the same unit type.
 local regresive_collect = true -- if on will collect nearby idles within grouping_radius that are not yet timed out and group them as one package.
 local include_com = false -- flag if commader's are detected.
 local include_rez = false -- flag if rez bot's are detected.
-local factory_idle = true -- flag if factories are detected; Factories have a own queue and don't evoke a map ping; Simply audio warning + text, use alt+s to get first. This those not trigger when a factory is manually dequeued; only if it finishes the production queue.
+local factory_idle = false -- flag if factories are detected; Factories have a own queue and don't evoke a map ping; Simply audio warning + text, use alt+s to get first. This those not trigger when a factory is manually dequeued; only if it finishes the production queue.
 local include_comando = false -- flag if commandos are detected.
 local use_ping = true -- flag if using default game ping (only you, the player, can see this).
 
@@ -51,6 +53,8 @@ local idles_not_being_processed = 0
 local idle_factoies_timingout = {}
 local idle_factoies = {}
 local time_since_last_sound = 0 -- ticks up when a sound is played. Blocks audio spamming.
+local time_since_last_warning = 0 -- ticks up when a warning is played. Blocks audio spamming.
+local first_warn = true
 
 local function dump_table(t) -- converts table to string
     local s = ""
@@ -83,7 +87,7 @@ local function get_idx(tab, uID) -- figures out index of a unit with uID
         if (v["uID"] == uID) then
             idx = i
             break
-        end 
+        end
     end
     return idx
 end
@@ -109,7 +113,7 @@ local function add_options() -- constructs options and adds them to the settings
         local op = {
             widgetname = widget_name,
             name = "Idle update freq.",
-            description = "Specify how many game frames (60 per s) it takes before executed the next iterration.",
+            description = "Specify how many game frames (30 per s) it takes before executed the next iterration.",
             id = "Idle_Ticker",
             value = interval_to_check,
             type = "slider",
@@ -133,6 +137,21 @@ local function add_options() -- constructs options and adds them to the settings
             step = 5,
             onchange = function(i,v)
                 still_idle_warning = v
+            end
+        }
+        table.insert(t, op)
+        op = {
+            widgetname = widget_name,
+            name = "Sec. warning repeat time",
+            description = "Specify how many how many updates it will take to trigger the secundary warning ones again.",
+            id = "Idle_Warn_Rep",
+            value = still_idle_repeat,
+            type = "slider",
+            min = 10,
+            max = 300,
+            step = 5,
+            onchange = function(i,v)
+                still_idle_repeat = v
             end
         }
         table.insert(t, op)
@@ -249,7 +268,7 @@ end
 
 local function del_options() -- deletes all options from settings mmenu
     if WG["options"] then
-        WG["options"].removeOptions({"Idle_Ticker", "Still_Idle_Warn", "Idle_Timer", "Idle_Radius", "Message_Type", "Idle_Regresive", "Idle_Fact", "Idle_Com", "Idle_Rez", "Idle_Comando"})
+        WG["options"].removeOptions({"Idle_Ticker", "Still_Idle_Warn", "Idle_Warn_Rep", "Idle_Timer", "Idle_Radius", "Message_Type", "Idle_Regresive", "Idle_Fact", "Idle_Com", "Idle_Rez", "Idle_Comando"})
     end
 end
 
@@ -295,11 +314,13 @@ local function still_idle(uID, type) -- checks if unit is still idle, returns tr
     else return true end
 end
 
-local function play_sound(path)
+local function play_sound(path) -- plays audio and returns true if sound is played
     if time_since_last_sound > audio_timer then
         Spring.PlaySoundFile(path, audio_volume, 'ui')
         time_since_last_sound = 0
+        return true
     end
+    return false
 end
 
 local function ping_unit(x, y, z, text, udef) -- plays audio sound and pings if use_ping is true
@@ -504,18 +525,33 @@ function widget:GameFrame(tick)
             end
         end
         -- !SECTION
+        print("idle:" .. tostring(#idles) .. " / " .. tostring(#idle_factoies))
         if #idles == 0 and #idle_factoies == 0 then
             idles_not_being_processed = 0
+            first_warn = true
         elseif idle_exising == true then
             idles_not_being_processed = idles_not_being_processed + 1
         end
     end
     -- play idler still idling sound
-    if math.fmod(tick, interval_to_check*10) == 0 then
-        if idles_not_being_processed >= still_idle_warning then
+    if math.fmod(tick, interval_to_check) == 0 then
+        print("warn:" .. tostring(idles_not_being_processed) .. " / " .. tostring(time_since_last_warning))
+        if idles_not_being_processed >= still_idle_warning then -- checks if threshold is reached
+            if first_warn == true then -- ensure it warns ones
+                time_since_last_warning = still_idle_repeat
+            else
+                time_since_last_warning = time_since_last_warning + 1
+            end
+        end
+        if time_since_last_warning >= still_idle_repeat then -- checks if enough time has passed since last warning
+            print("waring on " .. tostring(time_since_last_warning))
             local sound_bit = warning_audio[math.random(1,#warning_audio)]
-            play_sound(sound_bit)
-            time_since_last_sound = 0
+            local played = play_sound(sound_bit)
+            if played then
+                first_warn = false
+                time_since_last_sound = 0
+                time_since_last_warning = 0
+            end
         end
     end
 end
@@ -541,6 +577,7 @@ function widget:GetConfigData() -- Retrevies settings on load.
     data.rez = include_rez
     data.spezial = include_comando
     data.factory = factory_idle
+    data.sir = still_idle_repeat
     return data
 end
 
@@ -555,4 +592,5 @@ function widget:SetConfigData(data) -- Stores settings to be recovered.
     if data.rez ~= nil then include_rez = data.rez end
     if data.spezial ~= nil then include_comando = data.spezial end
     if data.factory ~= nil then factory_idle = data.factory end
+    if data.sir ~= nil then still_idle_repeat = data.sir end
 end
