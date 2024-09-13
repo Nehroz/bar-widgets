@@ -12,7 +12,7 @@ local substitution_audio = "Sounds/movement/arm-bot-at-sel.wav" -- internal soun
 
 -- game has 30 ticks per second, as example if you want something to play every 3 seconds, set it to 3*30 = 90
 local audio_volume = 0.85 -- how loud the audio queues should be
-local allways_exclude_names = {"corvacct"} -- excluded units that count as mobile builders. (corvacct is the turret inside the printer, it's not the printer itself!)
+local allways_exclude_names = {"corvacct", "armantiship", "corantiship"} -- excluded units that count as mobile builders. (corvacct is the turret inside the printer, it's not the printer itself!)
 local interval_to_check = 10 -- how many game ticks for a check for idle removal. (30 = 1 second)
 local audio_timer = 20 -- how many ticks have to pass before a new audio bit can be played; To avoid spamming.
 local still_idle_warning = 120 -- factor of interval_to_check, will start secundary warn sound.
@@ -27,7 +27,7 @@ local include_comando = false -- flag if commandos are detected.
 local use_ping = true -- flag if using default game ping (only you, the player, can see this).
 
 local widget_name = "Idle Constructor Notifiaction"
-local widget_version = "1.4b"
+local widget_version = "1.4d"
 function widget:GetInfo()
     return {
         name = widget_name,
@@ -42,7 +42,7 @@ function widget:GetInfo()
 end
 -- used by script; keys
 local com = {"armcom", "corcom", "legcom"}
-local rez = {"armrectr", "cornecro"} --TODO: add Legion Rez when Legion gets there own (currently cornecro)
+local rez = {"armrectr", "cornecro", "armrecl", "correcl"} --TODO: add Legion Rez when Legion gets there own (currently cornecro)
 local special = {"cormando"} -- for now this is just the commando
 -- used by script; variables
 local is_play = false
@@ -456,6 +456,11 @@ function widget:KeyPress(key, mods, isRepeating)
         local u = idle_factoies[1]
         Spring.SetCameraTarget(u["x"], u["y"], u["z"], 0.5)
         Spring.SelectUnitArray({u["uID"]})
+    elseif key == 100 and mods.alt then -- d+alt (dismiss idle warning)
+        idles = {}
+        idle_factoies = {}
+        first_warn = true
+        idles_not_being_processed = 0
     end
 end
 
