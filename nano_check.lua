@@ -1,5 +1,5 @@
 local WIDGET_NAME = "Construction Turrets Range Check"
-local WIDGET_VERSION = "1.0"
+local WIDGET_VERSION = "1.1"
 
 function widget:GetInfo()
     return {
@@ -25,13 +25,14 @@ local function make_set(t) -- coverts a table to a Set()-like
 end
 
 local function check_turret_range(uID)
-    local x, y, z = Spring.GetUnitPosition(uID)
     local build_distance = UnitDefs[Spring.GetUnitDefID(uID)].buildDistance
     local cmds = Spring.GetUnitCommands(uID, -1)
     for _, cmd in ipairs(cmds) do
-        if cmd.id == CMD.REPAIR or cmd.id == CMD.GUARD then
-            local tx, ty, tz = Spring.GetUnitPosition(cmd["params"][1])
-            local distance = math.sqrt((x-tx)^2+(y-ty)^2+(z-tz)^2)
+        if (cmd.id == CMD.REPAIR
+        or cmd.id == CMD.GUARD
+        or cmd.id == CMD.RECLAIM
+        or cmd.id == CMD.ATTACK) then
+            local distance = Spring.GetUnitSeparation(uID, cmd.params[1], true)
             if distance > build_distance then
                 Spring.GiveOrderToUnit(uID, CMD.STOP, {}, {})
             end
