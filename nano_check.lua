@@ -1,5 +1,5 @@
 local WIDGET_NAME = "Construction Turrets Range Check"
-local WIDGET_VERSION = "1.4b"
+local WIDGET_VERSION = "1.4c"
 -- ### VERSIONS ###
 -- 1.0 - initial release, basic
 -- 1.1 - added more command types (reclaim, attack)
@@ -7,6 +7,7 @@ local WIDGET_VERSION = "1.4b"
 -- 1.3 - fixed a range difiation caused by the game adding model radius
 -- 1.4a - optimization, added LRU cache to reduce the number of calls to the engine
 -- 1.4b - optimization, changed the listening methode to await a command instead of polling x'th frame
+-- 1.4c - optimization, added a command limit to prevent the engine from ignoring commands
 
 function widget:GetInfo()
     return {
@@ -80,12 +81,16 @@ end
 -- !SECTION OOP
 
 -- SECTION Settings and other variables
-local DELAY = 5 -- Delay between command given to processing
+local DELAY = 15 -- Delay between command given to processing
 local TURRETS = {"armnanotc", "cornanotc", "armnanotct2", "cornanotct2"} -- names of nano turrets names
+local COMMAND_LIMIT = 20 -- Maximum number of commands to be processed in a single frame, blocking
 local is_play = false
 local counter = 0
 local listening = false
+local processed = false
 local current_towers = {}
+local command_budget = 0
+local to_be_cleared = {}
 local new_orders = {}
 local lru_cache = LRUCache:new(10)
 -- !SECTION Settings and other variables
@@ -136,9 +141,10 @@ local function check_turret_range(uID)
         end
     end
     if is_changed then
-        Spring.GiveOrderToUnit(uID, CMD.STOP, {}, {} ) -- clear nano
         if #new_cmds > 0 then
-            table.insert(new_orders, {uID, new_cmds}) -- schedule on next frame
+            table.insert(new_orders, {uID, new_cmds}) -- schedule for new order
+        else
+            table.insert(to_be_cleared, uID) -- schedule for clear
         end
     end
 end
@@ -151,23 +157,41 @@ end
 function widget:GameFrame()
     if listening then -- only as long as turret is selection and one post-frame after selection drop.
         counter = counter + 1
+        command_budget = COMMAND_LIMIT
 
         -- apply scheduled orders, on the next frame
-        -- NOTE: this is imperative as multiple orders per frame overwrites each other,
-        -- hence the new orders list will be given in the next frame, after sending a stop command.
-        if #new_orders > 0 then
-            for _, order in ipairs(new_orders) do
-                Spring.GiveOrderArrayToUnit(order[1], order[2])
+        if #to_be_cleared > 0 then
+            for i= #to_be_cleared, 1, -1 do
+                Spring.GiveOrderToUnit(to_be_cleared[i], CMD.STOP, {}, {} ) -- clear nano
+                table.remove(to_be_cleared, i) -- pop
+                command_budget = command_budget - 1
+                if command_budget <= 0 then
+                    break
+                end
             end
-            new_orders = {}
         end
 
-        if counter >= DELAY then -- after x frames the check is done
-            counter = 0
-            for _, tower in ipairs(current_towers) do
-                check_turret_range(tower)
+        if #new_orders > 0 and #to_be_cleared == 0 then
+            for i= #new_orders, 1, -1 do
+                Spring.GiveOrderArrayToUnit(new_orders[i][1], new_orders[i][2])
+                table.remove(new_orders, i) -- pop
+                command_budget = command_budget - 1
+                if command_budget <= 0 then
+                    break
+                end
             end
-            listening = false
+        end
+
+        if #to_be_cleared == 0 and #new_orders == 0 then
+            if  processed then
+                listening = false
+            elseif counter >= DELAY then -- after x frames the check is done
+                counter = 0
+                for _, tower in ipairs(current_towers) do
+                    check_turret_range(tower)
+                end
+                processed = true
+            end
         end
     end
 end
@@ -190,6 +214,7 @@ function widget:UnitCommand(uID, _, _, _, _, _, _)
         if uID == nano then
             listening = true
             counter = 0
+            processed = false
             break
         end
     end
