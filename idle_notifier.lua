@@ -49,6 +49,7 @@ local is_play = false
 local exclude_names = {}
 local idles_timingout = {}
 local idles = {}
+local mark_stack = {}
 local idles_not_being_processed = 0
 local idle_factoies_timingout = {}
 local idle_factoies = {}
@@ -333,7 +334,7 @@ local function ping_unit(x, y, z, text, udef) -- plays audio sound and pings if 
         play_sound(rez_warning)
     elseif udef.isFactory then -- if it's a factory
         play_sound(fac_warning)
-        Spring.SendMessageToPlayer(Spring.GetMyPlayerID(), text) -- REVISE, better way?
+        Spring.SendMessageToPlayer(Spring.GetMyPlayerID(), text) -- REVISE better way?
         return
     else -- anything else; cons
         play_sound(con_warning)
@@ -342,7 +343,7 @@ local function ping_unit(x, y, z, text, udef) -- plays audio sound and pings if 
     if use_ping then
         Spring.MarkerAddPoint(x, y, z, text, true) --def.translatedHumanName
     else
-        Spring.SendMessageToPlayer(Spring.GetMyPlayerID(), text) -- REVISE, better way?
+        Spring.SendMessageToPlayer(Spring.GetMyPlayerID(), text) -- REVISE: better way?
     end
 end
 
@@ -471,10 +472,11 @@ function widget:GameFrame(tick)
         -- SECTION 1: Unit handling
         --checks if idle no longer are idle, removes element and marker
         for i=#idles,1,-1 do
+            local first_uID = idles[i][1]["uID"]
             for j=#idles[i], 1, -1 do
                 if still_idle(idles[i][j]["uID"], 0) == false then
                     if use_ping then
-                        Spring.MarkerErasePosition(idles[i][j]["x"], idles[i][j]["y"], idles[i][j]["z"])
+                        Spring.MarkerErasePosition(mark_stack[first_uID].x, mark_stack[first_uID].y, mark_stack[first_uID].z)
                     end
                     table.remove(idles[i], j)
                 else
@@ -504,7 +506,10 @@ function widget:GameFrame(tick)
             if #grp > 1 then
                 str = str .. tostring(#grp) .. "x "
             end
-            ping_unit(pu["x"], pu["y"], pu["z"], str.. UnitDefs[pu["uDefID"]].translatedHumanName .. "!", UnitDefs[pu["uDefID"]])
+            local coords = {x = pu["x"], y = pu["y"], z = pu["z"]}
+            ping_unit(coords["x"], coords["y"], coords["z"], str.. UnitDefs[pu["uDefID"]].translatedHumanName .. "!", UnitDefs[pu["uDefID"]])
+            local marker_packed = {x = pu["x"], y = pu["y"], z = pu["z"]}
+            mark_stack[pu["uID"]] = marker_packed
             table.insert(idles, grp)
         end
         -- !SECTION
