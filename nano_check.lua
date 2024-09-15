@@ -1,12 +1,12 @@
 local WIDGET_NAME = "Construction Turrets Range Check"
-local WIDGET_VERSION = "1.2"
+local WIDGET_VERSION = "1.3"
 
 function widget:GetInfo()
     return {
         name = WIDGET_NAME,
         desc = "Stops construction turrets from being assinged to constructions out of reach.",
         author = "Nehroz",
-        date = "2024.9.14", -- update date.
+        date = "2024.9.15", -- update date.
         license = "GPL v3",
         layer = 0,
         version = WIDGET_VERSION
@@ -27,7 +27,8 @@ end
 
 local function check_turret_range(uID)
     local x, y, z = Spring.GetUnitPosition(uID)
-    local build_distance = UnitDefs[Spring.GetUnitDefID(uID)].buildDistance
+    --local build_distance = UnitDefs[Spring.GetUnitDefID(uID)].buildDistance
+    local build_distance = Spring.GetUnitEffectiveBuildRange(uID, nil)
     local is_changed = false
     local is_first_cmd = true
     local cmds = Spring.GetUnitCommands(uID, -1)
@@ -44,7 +45,7 @@ local function check_turret_range(uID)
             local tx, ty, tz = Spring.GetUnitPosition(cmd["params"][1])
             if tx == nil then break end
             local distance = math.sqrt((x-tx)^2+(y-ty)^2+(z-tz)^2)
-            if distance < build_distance then
+            if distance < build_distance + Spring.GetUnitDefDimensions(Spring.GetUnitDefID(cmd.params[1])).radius then
                 if is_first_cmd then
                     cmd.options.shift = false
                     is_first_cmd = false
