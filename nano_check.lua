@@ -1,18 +1,19 @@
 local WIDGET_NAME = "Construction Turrets Range Check"
-local WIDGET_VERSION = "1.4c"
+local WIDGET_VERSION = "1.4d"
 -- ### VERSIONS ###
 -- 1.0 - initial release, basic
 -- 1.1 - added more command types (reclaim, attack)
 -- 1.2 - added support for queued commands to be processed
--- 1.3 - fixed a range difiation caused by the game adding model radius
+-- 1.3 - fixed a range deviation caused by the game adding model radius
 -- 1.4a - optimization, added LRU cache to reduce the number of calls to the engine
--- 1.4b - optimization, changed the listening methode to await a command instead of polling x'th frame
+-- 1.4b - optimization, changed the listening method to await a command instead of polling x'th frame
 -- 1.4c - optimization, added a command limit to prevent the engine from ignoring commands
+-- 1.4d - optimization, replaced loop with GiveOrderToUnitArray, renaiming and adding comments
 
 function widget:GetInfo()
     return {
         name = WIDGET_NAME,
-        desc = "Stops construction turrets from being assinged to constructions out of reach.",
+        desc = "Stops construction turrets from being assigned to constructions out of reach.",
         author = "Nehroz",
         date = "2024.9.15", -- update date.
         license = "GPL v3",
@@ -81,7 +82,10 @@ end
 -- !SECTION OOP
 
 -- SECTION Settings and other variables
-local DELAY = 15 -- Delay between command given to processing
+-- DELAY is the number of frames between a given command and getting processed;
+-- Should be bigger than`COMMAND_LIMIT/expected number of nanos`. Default is 15.
+-- NOTE: There is no "overflow" protection. Setting DELAY to low will cause stacks to fill up constantly.
+local DELAY = 15
 local TURRETS = {"armnanotc", "cornanotc", "armnanotct2", "cornanotct2"} -- names of nano turrets names
 local COMMAND_LIMIT = 20 -- Maximum number of commands to be processed in a single frame, blocking
 local is_play = false
@@ -90,9 +94,9 @@ local listening = false
 local processed = false
 local current_towers = {}
 local command_budget = 0
-local to_be_cleared = {}
-local new_orders = {}
-local lru_cache = LRUCache:new(10)
+local to_be_cleared = {} -- stack of uIDs to be cleared
+local new_orders = {} -- stack of {uid = {cmdArr},...} to be processed
+local radius_cache = LRUCache:new(10) -- LRU cache to reduce the number of calls for model radius
 -- !SECTION Settings and other variables
 
 -- converts a table to a Set()-like
@@ -121,20 +125,20 @@ local function check_turret_range(uID)
             -- In case there is any range errors look here and see if using 2D (ignoring Z).
             -- I can't find if Nano's use 2D or 3D.
             local distance = math.sqrt((x-tx)^2+(y-ty)^2+(z-tz)^2)
-            -- LRU caching of model radius
-            local radius = lru_cache:get(tuID)
+            -- LRU caching of model radius, so we don't have to get it every time
+            local radius = radius_cache:get(tuID)
             if not radius then
                 radius = Spring.GetUnitDefDimensions(Spring.GetUnitDefID(tuID)).radius
-                lru_cache:put(tuID, radius)
+                radius_cache:put(tuID, radius)
             end
-            if distance < build_distance + radius then
-                if is_first_cmd then
+            if distance < build_distance + radius then -- BP uses build_distance + radius (sphereical shape of model)
+                if is_first_cmd then -- not sending shift overwrites previous command
                     cmd.options.shift = false
                     is_first_cmd = false
                 else
                     cmd.options.shift = true
                 end
-                table.insert(new_cmds, {cmd.id, cmd.params, cmd.options})
+                table.insert(new_cmds, {cmd.id, cmd.params, cmd.options}) -- building cmdArr
             else
                 is_changed = true
             end
@@ -151,6 +155,14 @@ end
 
 function widget:Initialize()
     is_play = Spring.GetSpectatingState()
+    Spring.Echo(WIDGET_NAME .. " V" .. WIDGET_VERSION)
+    -- pre-check set
+    for _, name in ipairs(TURRETS) do
+        if UnitDefNames[name].buildDistance == nil then
+            Spring.Echo("Error: " .. name .. " has no buildDistance")
+            widget:Shutdown()
+        end
+    end
     make_set(TURRETS)
 end
 
@@ -161,24 +173,20 @@ function widget:GameFrame()
 
         -- apply scheduled orders, on the next frame
         if #to_be_cleared > 0 then
-            for i= #to_be_cleared, 1, -1 do
-                Spring.GiveOrderToUnit(to_be_cleared[i], CMD.STOP, {}, {} ) -- clear nano
-                table.remove(to_be_cleared, i) -- pop
-                command_budget = command_budget - 1
-                if command_budget <= 0 then
-                    break
-                end
-            end
+            Spring.GiveOrderToUnitArray(to_be_cleared, CMD.STOP, {}, {} )
+            command_budget = command_budget - #to_be_cleared
+            to_be_cleared = {}
         end
 
         if #new_orders > 0 and #to_be_cleared == 0 then
             for i= #new_orders, 1, -1 do
-                Spring.GiveOrderArrayToUnit(new_orders[i][1], new_orders[i][2])
-                table.remove(new_orders, i) -- pop
-                command_budget = command_budget - 1
                 if command_budget <= 0 then
                     break
                 end
+                Spring.GiveOrderArrayToUnit(new_orders[i][1], new_orders[i][2])
+                table.remove(new_orders, i) -- pop
+                command_budget = command_budget - 1
+
             end
         end
 
@@ -208,6 +216,7 @@ function widget:SelectionChanged(selectedUnits)
     end
 end
 
+-- Listener to when nano receives a command
 function widget:UnitCommand(uID, _, _, _, _, _, _)
     if is_play ~= false then return end
     for _, nano in ipairs(current_towers) do
