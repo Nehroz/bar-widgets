@@ -1,5 +1,5 @@
 local WIDGET_NAME = "Construction Turrets Range Check"
-local WIDGET_VERSION = "1.4d"
+local WIDGET_VERSION = "1.4e"
 -- ### VERSIONS ###
 -- 1.0 - initial release, basic
 -- 1.1 - added more command types (reclaim, attack)
@@ -9,6 +9,7 @@ local WIDGET_VERSION = "1.4d"
 -- 1.4b - optimization, changed the listening method to await a command instead of polling x'th frame
 -- 1.4c - optimization, added a command limit to prevent the engine from ignoring commands
 -- 1.4d - optimization, replaced loop with GiveOrderToUnitArray, renaiming and adding comments
+-- 1.4e - changed distance calculation from 3D to 2D
 
 function widget:GetInfo()
     return {
@@ -122,15 +123,15 @@ local function check_turret_range(uID)
             if tx == nil then break end
             -- NOTE equal to Spring.GetUnitSeparation(u1, u2, false, false) Uses 3D distance not 2D
             -- This is faster then synch reading from the engine; jumping between threats.
-            -- In case there is any range errors look here and see if using 2D (ignoring Z).
-            -- I can't find if Nano's use 2D or 3D.
-            local distance = math.sqrt((x-tx)^2+(y-ty)^2+(z-tz)^2)
+            -- 1.4e changed to use 2D distance x and z instead of 3D, as that seems to be how nanos work
+            local distance = math.sqrt((x - tx)^2 + (z - tz)^2) --math.sqrt((x-tx)^2+(y-ty)^2+(z-tz)^2)
             -- LRU caching of model radius, so we don't have to get it every time
             local radius = radius_cache:get(tuID)
             if not radius then
                 radius = Spring.GetUnitDefDimensions(Spring.GetUnitDefID(tuID)).radius
                 radius_cache:put(tuID, radius)
             end
+            Spring.Echo(radius, build_distance, distance)
             if distance < build_distance + radius then -- BP uses build_distance + radius (sphereical shape of model)
                 if is_first_cmd then -- not sending shift overwrites previous command
                     cmd.options.shift = false
