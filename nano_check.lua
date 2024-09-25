@@ -1,5 +1,5 @@
 local WIDGET_NAME = "Construction Turrets Range Check"
-local WIDGET_VERSION = "1.4e"
+local WIDGET_VERSION = "1.4f"
 -- ### VERSIONS ###
 -- 1.0 - initial release, basic
 -- 1.1 - added more command types (reclaim, attack)
@@ -10,6 +10,7 @@ local WIDGET_VERSION = "1.4e"
 -- 1.4c - optimization, added a command limit to prevent the engine from ignoring commands
 -- 1.4d - optimization, replaced loop with GiveOrderToUnitArray, renaiming and adding comments
 -- 1.4e - changed distance calculation from 3D to 2D
+-- 1.4f - removed a Spring.Echo() that was left from debugging.
 
 function widget:GetInfo()
     return {
@@ -131,7 +132,6 @@ local function check_turret_range(uID)
                 radius = Spring.GetUnitDefDimensions(Spring.GetUnitDefID(tuID)).radius
                 radius_cache:put(tuID, radius)
             end
-            Spring.Echo(radius, build_distance, distance)
             if distance < build_distance + radius then -- BP uses build_distance + radius (sphereical shape of model)
                 if is_first_cmd then -- not sending shift overwrites previous command
                     cmd.options.shift = false
