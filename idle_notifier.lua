@@ -5,14 +5,14 @@
 local audio_queue = "LuaUI/Widgets/Sounds/idling_unit.wav"  -- sound player with ping, to differtiate audio queue.
 local warning_audio = {"LuaUI/Widgets/Sounds/overtime_having_idles.wav", "LuaUI/Widgets/Sounds/overtime_idles_remain.wav", "LuaUI/Widgets/Sounds/overtime_queue_not_empty.wav", "LuaUI/Widgets/Sounds/overtime_unmanaged_units.wav"} -- sound played if idles are still idle after some time.
 local com_warning = "LuaUI/Widgets/Sounds/idling_com.wav" -- sound played when idle is a Commander
-local con_warning = "LuaUI/Widgets/Sounds/idling_con.wav" -- sound played when idle is a Constuctor
+local con_warning = "LuaUI/Widgets/Sounds/idling_con.wav" -- sound played when idle is a Constructor
 local rez_warning = "LuaUI/Widgets/Sounds/idling_rezbot.wav" -- sound played when idle is a Rez bot
 local fac_warning = "LuaUI/Widgets/Sounds/idle_lab.wav" -- sound played when idle is a Factory
 local substitution_audio = "Sounds/movement/arm-bot-at-sel.wav" -- internal sound used when files missing.
 
 -- game has 30 ticks per second, as example if you want something to play every 3 seconds, set it to 3*30 = 90
 local audio_volume = 0.85 -- how loud the audio queues should be
-local allways_exclude_names = {"corvacct", "armantiship", "corantiship"} -- excluded units that count as mobile builders. (corvacct is the turret inside the printer, it's not the printer itself!)
+local always_exclude_names = {"corvacct", "armantiship", "corantiship"} -- excluded units that count as mobile builders. (corvacct is the turret inside the printer, it's not the printer itself!)
 local interval_to_check = 10 -- how many game ticks for a check for idle removal. (30 = 1 second)
 local audio_timer = 20 -- how many ticks have to pass before a new audio bit can be played; To avoid spamming.
 local still_idle_warning = 120 -- factor of interval_to_check, will start secundary warn sound.
@@ -23,10 +23,10 @@ local regresive_collect = true -- if on will collect nearby idles within groupin
 local include_com = false -- flag if commader's are detected.
 local include_rez = false -- flag if rez bot's are detected.
 local factory_idle = false -- flag if factories are detected; Factories have a own queue and don't evoke a map ping; Simply audio warning + text, use alt+s to get first. This those not trigger when a factory is manually dequeued; only if it finishes the production queue.
-local include_comando = false -- flag if commandos are detected.
+local include_commando = false -- flag if commandos are detected.
 local use_ping = true -- flag if using default game ping (only you, the player, can see this).
 
-local widget_name = "Idle Constructor Notifiaction"
+local widget_name = "Idle Constructor Notification"
 local widget_version = "1.4f"
 function widget:GetInfo()
     return {
@@ -114,7 +114,7 @@ local function add_options() -- constructs options and adds them to the settings
         local op = {
             widgetname = widget_name,
             name = "Idle update freq.",
-            description = "Specify how many game frames (30 per s) it takes before executed the next iterration.",
+            description = "Specify how many game frames (30 per s) it takes before executed the next iteration.",
             id = "Idle_Ticker",
             value = interval_to_check,
             type = "slider",
@@ -129,7 +129,7 @@ local function add_options() -- constructs options and adds them to the settings
         op = {
             widgetname = widget_name,
             name = "Sec. warning time",
-            description = "Specify how many intervalls of updates it will take to trigger the secundary warning. Reminding you that you have still idles.",
+            description = "Specify how many intervals of updates it will take to trigger the secundary warning. Reminding you that you have still idles.",
             id = "Still_Idle_Warn",
             value = still_idle_warning,
             type = "slider",
@@ -159,7 +159,7 @@ local function add_options() -- constructs options and adds them to the settings
         op = {
             widgetname = widget_name,
             name = "Idle timeout",
-            description = "Specify many frames (30 per s) a con needs to be idle before being processed and pinged. Importent for grouping out of synch going idle units ex: after group move, so more likely grouping. Trade-off is a longer time until warning of the idle.",
+            description = "Specify many frames (30 per s) a con needs to be idle before being processed and pinged. Important for grouping out of synch going idle units ex: after group move, so more likely grouping. Trade-off is a longer time until warning of the idle.",
             id = "Idle_Timer",
             value = time_out_minimal,
             type = "slider",
@@ -188,7 +188,7 @@ local function add_options() -- constructs options and adds them to the settings
         table.insert(t, op)
         op = {
             widgetname = widget_name,
-            name = "Idle grouping fresh cons too",
+            name = "Idle group newly idle cons too",
             description = "Allows the script to collect not yet timmed out and fresh idling units to be grouped up.",
             id = "Idle_Regresive",
             value = regresive_collect,
@@ -212,7 +212,7 @@ local function add_options() -- constructs options and adds them to the settings
         table.insert(t, op)
         op = {
             widgetname = widget_name,
-            name = "Idle factory notify",
+            name = "Do Factories idles",
             description = "Will pop idle sound on factories without a ping (no matter the \"Use a ping\" setting.) The factory queue is isolated from the other idles and can be worked off by using alt+s in the order they went idle. Factories that where manually dequeued will not trigger this.",
             id = "Idle_Fact",
             value = factory_idle,
@@ -226,7 +226,7 @@ local function add_options() -- constructs options and adds them to the settings
         table.insert(t, op)
         op = {
             widgetname = widget_name,
-            name = "Idle includes Commanders",
+            name = "Include Commanders",
             description = "Will also idle warn for commanders.",
             id = "Idle_Com",
             value = include_com,
@@ -239,7 +239,7 @@ local function add_options() -- constructs options and adds them to the settings
         table.insert(t, op)
         op = {
             widgetname = widget_name,
-            name = "Idle includes rezbots",
+            name = "Include rezbots",
             description = "Will also pop idle warnings on rezbots.",
             id = "Idle_Rez",
             value = include_rez,
@@ -252,13 +252,13 @@ local function add_options() -- constructs options and adds them to the settings
         table.insert(t, op)
         op = {
             widgetname = widget_name,
-            name = "Idle includes comando",
+            name = "Include Commando",
             description = "Will also pop idle warnings on rezbots.",
-            id = "Idle_Comando",
-            value = include_comando,
+            id = "Idle_Commando",
+            value = include_commando,
             type = "bool",
             onchange = function(i,v)
-                include_comando = v
+                include_commando = v
                 Exclution_Generator()
             end
         }
@@ -269,13 +269,13 @@ end
 
 local function del_options() -- deletes all options from settings mmenu
     if WG["options"] then
-        WG["options"].removeOptions({"Idle_Ticker", "Still_Idle_Warn", "Idle_Warn_Rep", "Idle_Timer", "Idle_Radius", "Message_Type", "Idle_Regresive", "Idle_Fact", "Idle_Com", "Idle_Rez", "Idle_Comando"})
+        WG["options"].removeOptions({"Idle_Ticker", "Still_Idle_Warn", "Idle_Warn_Rep", "Idle_Timer", "Idle_Radius", "Message_Type", "Idle_Regresive", "Idle_Fact", "Idle_Com", "Idle_Rez", "Idle_Commando"})
     end
 end
 
 local function find_nearby(t_collector, t_search, unit)
     for i = #t_search, 1, -1 do
-        if unit["uDefID"] == t_search[i]["uDefID"] then --identiy check
+        if unit["uDefID"] == t_search[i]["uDefID"] then --identify check
             if vec_len(unit["x"]-t_search[i]["x"], unit["y"]-t_search[i]["y"], unit["z"]-t_search[i]["z"]) < grouping_radius then
                 table.insert(t_collector, t_search[i])
                 table.remove(t_search, i)
@@ -355,10 +355,10 @@ function Exclution_Generator() -- Generates and unions table for exclude_names. 
     if include_rez == false then
         t = union(t, rez)
     end
-    if include_comando == false then
+    if include_commando == false then
         t = union(t, special)
     end
-    exclude_names = union(allways_exclude_names, t)
+    exclude_names = union(always_exclude_names, t)
 end
 
 function widget:Initialize()
@@ -394,6 +394,35 @@ function widget:Initialize()
     Exclution_Generator()
     widget:Update()
     print(widget_name .. " V" .. widget_version .. " loaded.")
+
+    widgetHandler.actionHandler:AddAction(self, "select_latest_idle_unit", select_latest_idle_unit, nil, "p")
+    widgetHandler.actionHandler:AddAction(self, "select_latest_idle_factory", select_latest_idle_unit, nil, "p")
+    widgetHandler.actionHandler:AddAction(self, "dismiss_idles", select_latest_idle_unit, nil, "p")
+end
+
+local function select_latest_idle_unit():
+    if #idles < 1 then return end
+    local grp = idles[#idles]
+    local pu = grp[1]
+    Spring.SetCameraTarget(pu["x"], pu["y"], pu["z"], 0.5)
+    local sgrp = {}
+    for i=#grp,1,-1 do table.insert(sgrp, grp[i]["uID"]) end
+    Spring.SelectUnitArray(sgrp)
+end
+
+local function select_latest_idle_factory():
+    if factory_idle == false then return end
+    if #idle_factoies < 1 then return end
+    local u = idle_factoies[1]
+    Spring.SetCameraTarget(u["x"], u["y"], u["z"], 0.5)
+    Spring.SelectUnitArray({u["uID"]})
+end
+
+local function dismiss_idles():
+    idles = {}
+    idle_factoies = {}
+    first_warn = true
+    idles_not_being_processed = 0
 end
 
 function widget:Update()
@@ -402,7 +431,7 @@ end
 
 function widget:UnitIdle(uID, uDefID, uClan)
     if is_play ~= false then return end
-    if Spring.GetUnitIsDead(uID) ~= false then return end --supress idle detection on dead units.
+    if Spring.GetUnitIsDead(uID) ~= false then return end --suppress idle detection on dead units.
     if uClan ~= Spring.GetMyTeamID() then return end -- check if it's your unit before further checks.
     local def = UnitDefs[uDefID]
     if def.isFactory == true and factory_idle then -- if it's a fac, add it to it's table.
@@ -411,7 +440,7 @@ function widget:UnitIdle(uID, uDefID, uClan)
         table.insert(idle_factoies_timingout, {["x"] = x, ["y"] = y, ["z"] = z, ["uID"] = uID, ["uDefID"] = uDefID, ["time"] = t})
         return
     end
-    if def.isMobileBuilder == false or has_value(exclude_names, def.name) then return end -- mobile builder + exlude units
+    if def.isMobileBuilder == false or has_value(exclude_names, def.name) then return end -- mobile builder + exclude units
     local x, y, z = Spring.GetUnitPosition(uID)
     local t, _ = Spring.GetGameFrame()
     local unit = {["x"] = x, ["y"] = y, ["z"] = z, ["uID"] = uID, ["uDefID"] = uDefID, ["time"] = t}
@@ -442,32 +471,32 @@ function widget:UnitDestroyed(uID, uDefID, uClan)
     end
 end
 
-function widget:KeyPress(key, mods, isRepeating)
-    if key == 97 and mods.alt then -- a+alt
-        if #idles < 1 then return end
-        local grp = idles[#idles]
-        local pu = grp[1]
-        Spring.SetCameraTarget(pu["x"], pu["y"], pu["z"], 0.5)
-        local sgrp = {}
-        for i=#grp,1,-1 do table.insert(sgrp, grp[i]["uID"]) end
-        Spring.SelectUnitArray(sgrp)
-    elseif key == 115 and mods.alt then -- s+alt
-        if factory_idle == false then return end
-        if #idle_factoies < 1 then return end
-        local u = idle_factoies[1]
-        Spring.SetCameraTarget(u["x"], u["y"], u["z"], 0.5)
-        Spring.SelectUnitArray({u["uID"]})
-    elseif key == 100 and mods.alt then -- d+alt (dismiss idle warning)
-        idles = {}
-        idle_factoies = {}
-        first_warn = true
-        idles_not_being_processed = 0
-    end
-end
+-- function widget:KeyPress(key, mods, isRepeating)
+--     if key == 97 and mods.alt then -- a+alt
+--         if #idles < 1 then return end
+--         local grp = idles[#idles]
+--         local pu = grp[1]
+--         Spring.SetCameraTarget(pu["x"], pu["y"], pu["z"], 0.5)
+--         local sgrp = {}
+--         for i=#grp,1,-1 do table.insert(sgrp, grp[i]["uID"]) end
+--         Spring.SelectUnitArray(sgrp)
+--     elseif key == 115 and mods.alt then -- s+alt
+--         if factory_idle == false then return end
+--         if #idle_factoies < 1 then return end
+--         local u = idle_factoies[1]
+--         Spring.SetCameraTarget(u["x"], u["y"], u["z"], 0.5)
+--         Spring.SelectUnitArray({u["uID"]})
+--     elseif key == 100 and mods.alt then -- d+alt (dismiss idle warning)
+--         idles = {}
+--         idle_factoies = {}
+--         first_warn = true
+--         idles_not_being_processed = 0
+--     end
+-- end
 
 function widget:GameFrame(tick)
     time_since_last_sound = time_since_last_sound + 1
-    local idle_exising = false
+    local idle_existing = false
     if math.fmod(tick, interval_to_check) == 0 then
         -- SECTION 1: Unit handling
         --checks if idle no longer are idle, removes element and marker
@@ -480,7 +509,7 @@ function widget:GameFrame(tick)
                     end
                     table.remove(idles[i], j)
                 else
-                    idle_exising = true
+                    idle_existing = true
                 end
             end
             if #idles[i] < 1 then
@@ -520,7 +549,7 @@ function widget:GameFrame(tick)
                 if still_idle(idle_factoies[i]["uID"], 1) == false then
                     table.remove(idle_factoies, i)
                 else
-                    idle_exising = true
+                    idle_existing = true
                 end
             end
             -- processing time outs
@@ -541,7 +570,7 @@ function widget:GameFrame(tick)
         if #idles == 0 and #idle_factoies == 0 then
             idles_not_being_processed = 0
             first_warn = true
-        elseif idle_exising == true then
+        elseif idle_existing == true then
             idles_not_being_processed = idles_not_being_processed + 1
         end
     end
@@ -585,7 +614,7 @@ function widget:GetConfigData() -- Retrevies settings on load.
     data.use_ping = use_ping
     data.com = include_com
     data.rez = include_rez
-    data.spezial = include_comando
+    data.spezial = include_commando
     data.factory = factory_idle
     data.sir = still_idle_repeat
     return data
@@ -600,7 +629,7 @@ function widget:SetConfigData(data) -- Stores settings to be recovered.
     if data.use_ping ~= nil then use_ping = data.use_ping end
     if data.com ~= nil then include_com = data.com end
     if data.rez ~= nil then include_rez = data.rez end
-    if data.spezial ~= nil then include_comando = data.spezial end
+    if data.spezial ~= nil then include_commando = data.spezial end
     if data.factory ~= nil then factory_idle = data.factory end
     if data.sir ~= nil then still_idle_repeat = data.sir end
 end
