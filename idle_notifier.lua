@@ -27,7 +27,7 @@ local include_commando = false -- flag if commandos are detected.
 local use_ping = true -- flag if using default game ping (only you, the player, can see this).
 
 local widget_name = "Idle Constructor Notification"
-local widget_version = "1.4f"
+local widget_version = "1.4g β"
 function widget:GetInfo()
     return {
         name = widget_name,
@@ -37,6 +37,7 @@ function widget:GetInfo()
         license = "GPL v3",
         layer = 0,
         enabled = true,
+        handler = true,
         version = widget_version
     }
 end
@@ -396,11 +397,11 @@ function widget:Initialize()
     print(widget_name .. " V" .. widget_version .. " loaded.")
 
     widgetHandler.actionHandler:AddAction(self, "select_latest_idle_unit", select_latest_idle_unit, nil, "p")
-    widgetHandler.actionHandler:AddAction(self, "select_latest_idle_factory", select_latest_idle_unit, nil, "p")
-    widgetHandler.actionHandler:AddAction(self, "dismiss_idles", select_latest_idle_unit, nil, "p")
+    widgetHandler.actionHandler:AddAction(self, "select_latest_idle_factory", select_latest_idle_factory, nil, "p")
+    widgetHandler.actionHandler:AddAction(self, "dismiss_idles", dismiss_idles, nil, "p")
 end
 
-local function select_latest_idle_unit()
+function select_latest_idle_unit()
     if #idles < 1 then return end
     local grp = idles[#idles]
     local pu = grp[1]
@@ -410,7 +411,7 @@ local function select_latest_idle_unit()
     Spring.SelectUnitArray(sgrp)
 end
 
-local function select_latest_idle_factory()
+function select_latest_idle_factory()
     if factory_idle == false then return end
     if #idle_factoies < 1 then return end
     local u = idle_factoies[1]
@@ -418,7 +419,7 @@ local function select_latest_idle_factory()
     Spring.SelectUnitArray({u["uID"]})
 end
 
-local function dismiss_idles()
+function dismiss_idles()
     idles = {}
     idle_factoies = {}
     first_warn = true
