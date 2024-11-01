@@ -1,6 +1,6 @@
 -- Customize these if you want to change things. (You can hover over a unit and hold "I" key to see it's internal name):
 -- units on this list are ignored by the script.
-local exlude_names = {"armcom", "corcom", "legcom", "armrectr", "cornecro", "cormando", "corfast", "armfark", "armconsul", "corforge", "corvac"}
+local exclude_names = {"armcom", "corcom", "legcom", "armrectr", "cornecro", "cormando", "corfast", "armfark", "armconsul", "corforge", "corvac"}
 -- Armada T1 and T2 constructors
 local arm_t1_names = {"armck", "armcv", "armch", "armca", "armcs", "armcsa", "armbeaver"}
 local arm_t2_names = {"armack", "armacv", "armaca", "armacsub"}
@@ -14,12 +14,13 @@ local leg_t2_names = {"legack", "legaca", "legacv", "coracsub"}
 function widget:GetInfo()
     return {
         name = "Select nearest Constructor of type",
-        desc = "Selects nearest constructor on map, near mouse. T1 alt+q or T2 alt+w or alt+e to sellect all con's on map.",
+        desc = "Selects nearest constructor on map, near mouse. T1 alt+q or T2 alt+w or alt+e to select all con's on map.",
         author = "Nehroz",
         date = "2024.3.x",
         license = "GPL v3",
-        layer = 0,    
+        layer = 0,
         enabled = true,
+        handler = true,
         version = "1.1"
     }
 end
@@ -51,7 +52,7 @@ local function get_all_cons() -- Returns table of all constructors qualifing.
     for _, uID in ipairs(us) do
         def = UnitDefs[Spring.GetUnitDefID(uID)]
         if def.isMobileBuilder == true then
-            if exlude_names[def.name] ~= true then
+            if exclude_names[def.name] ~= true then
                 table.insert(cons, uID)
     end end end
     return cons
@@ -85,20 +86,40 @@ function widget:Initialize()
     t2_names = union(arm_t2_names, cor_t2_names)
     t1_names = union(t1_names, leg_t1_names)
     t2_names = union(t2_names, leg_t2_names)
-    make_set(exlude_names)
+    make_set(exclude_names)
     make_set(t1_names)
     make_set(t2_names)
+
+    widgetHandler.actionHandler:AddAction(self, "select_nearest_t1_constructor", select_nearest_t1_constructor, nil, "p")
+	widgetHandler.actionHandler:AddAction(self, "select_nearest_t2_constructor", select_nearest_t2_constructor, nil, "p")
+	widgetHandler.actionHandler:AddAction(self, "select_all_constructors", select_all_constructors, nil, "p")
 end
 
-function widget:KeyPress(key, mods, isRepeating)
-    if key == 101 and mods.alt then --e+alt
-        cons = get_all_cons()
-        if cons ~= nil then Spring.SelectUnitArray(cons) end
-    elseif key ==  113 and mods.alt then --q+alt
-        con = find_nearest(get_all_cons(), t1_names)
-        if con ~= nil then Spring.SelectUnit(con) end
-    elseif key == 119 and mods.alt then --w+alt
-        con = find_nearest(get_all_cons(), t2_names)
-        if con ~= nil then Spring.SelectUnit(con) end
-    end
+function select_nearest_t1_constructor()
+    con = find_nearest(get_all_cons(), t1_names)
+    if con ~= nil then Spring.SelectUnit(con) end
 end
+
+function select_nearest_t2_constructor()
+    con = find_nearest(get_all_cons(), t2_names)
+    if con ~= nil then Spring.SelectUnit(con) end
+end
+
+function select_all_constructors()
+    cons = get_all_cons()
+    if cons ~= nil then Spring.SelectUnitArray(cons) end
+end
+
+-- DEPRECATED : old hardcoded keys
+-- function widget:KeyPress(key, mods, isRepeating)
+--     if key == 101 and mods.alt then --e+alt
+--         cons = get_all_cons()
+--         if cons ~= nil then Spring.SelectUnitArray(cons) end
+--     elseif key ==  113 and mods.alt then --q+alt
+--         con = find_nearest(get_all_cons(), t1_names)
+--         if con ~= nil then Spring.SelectUnit(con) end
+--     elseif key == 119 and mods.alt then --w+alt
+--         con = find_nearest(get_all_cons(), t2_names)
+--         if con ~= nil then Spring.SelectUnit(con) end
+--     end
+-- end
