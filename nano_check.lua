@@ -1,18 +1,19 @@
 local WIDGET_NAME = "Construction Turrets Range Check"
-local WIDGET_VERSION = "1.4g"
+local WIDGET_VERSION = "1.5"
 --[[
 ### VERSIONS ###
 1.0 - initial release, basic
 1.1 - added more command types (reclaim, attack)
-1.2 - added support for queued commands to be processed
+1.2 - added support for queued commands to be flag_processed
 1.3 - fixed a range deviation caused by the game adding model radius
 1.4a - optimization, added LRU cache to reduce the number of calls to the engine
-1.4b - optimization, changed the listening method to await a command instead of polling x'th frame
+1.4b - optimization, changed the flag_listening method to await a command instead of polling x'th frame
 1.4c - optimization, added a command limit to prevent the engine from ignoring commands
 1.4d - optimization, replaced loop with GiveOrderToUnitArray, renaiming and adding comments
 1.4e - changed distance calculation from 3D to 2D
 1.4f - removed a Spring.Echo() that was left from debugging.
 1.4g - refactored the code, added more comments, better readability.
+1.5 - fixed edge case that allows to skip the script the execution of the script by switching selection.
 ]]--
 
 function widget:GetInfo()
@@ -20,7 +21,7 @@ function widget:GetInfo()
         name = WIDGET_NAME,
         desc = "Stops construction turrets from being assigned to constructions out of reach.",
         author = "Nehroz",
-        date = "2024.10.03", -- update date.
+        date = "2024.11.01", -- update date.
         license = "GPL v3",
         layer = 0,
         version = WIDGET_VERSION
@@ -89,24 +90,24 @@ end
 
 -- SECTION Settings and other variables
 -- constants
--- DELAY is the number of frames between a given command and getting processed;
+-- DELAY is the number of frames between a given command and getting flag_processed;
 -- Should be bigger than`COMMAND_LIMIT/expected number of nanos`. Default is 15.
 -- NOTE: There is no "overflow" protection. Setting DELAY to low will cause stacks to fill up constantly.
 local DELAY = 15
 -- names of nano turrets names -- TODO Needs Legion nano's too
 local TURRETS = {"armnanotc", "cornanotc", "armnanotct2", "cornanotct2"}
--- Maximum number of commands to be processed in a single frame; Game sim blocking if too many commands per frame.
+-- Maximum number of commands to be flag_processed in a single frame; Game sim blocking if too many commands per frame.
 -- Default is 20. But modern hardware could handle more. 20 is sufficent for any game case.
 local COMMAND_LIMIT = 20
 -- variables
 local is_play = false
 local counter = 0
-local listening = false
-local processed = false
+local flag_listening = false
+local flag_processed = true
 local current_towers = {}
 local command_budget = 0
 local to_be_cleared = {} -- stack of uIDs to be cleared
-local new_orders = {} -- stack of {uid = {cmdArr},...} to be processed
+local new_orders = {} -- stack of {uid = {cmdArr},...} to be flag_processed
 local radius_cache = LRUCache:new(10) -- LRU cache to reduce the number of calls for model radius
 -- !SECTION Settings and other variables
 
@@ -205,17 +206,16 @@ local function processTurretRange()
         for _, tower in ipairs(current_towers) do
             checkTurretRange(tower)
         end
-        processed = true
+        flag_processed = true
     end
 end
 
 -- Handles the flow control. If no command is scheduled, it disables the listener for the gameframe loop,
 -- else it keeps calling the `processTurretRange` function, in case anything changed during re-ordering.
--- REVIEW the calling of processTurretRange over and over may be unnecessary since the additon of the listener trough widget:UnitCommand.
 local function handleFlowControl()
     if #to_be_cleared == 0 and #new_orders == 0 then
-        if processed then
-            listening = false
+        if flag_processed then
+            flag_listening = false
         else
             processTurretRange()
         end
@@ -238,7 +238,7 @@ function widget:Initialize()
 end
 
 function widget:GameFrame()
-    if listening then -- only as long as turret is selection and one post-frame after selection drop.
+    if flag_listening then -- only as long as turret is selection and one post-frame after selection drop.
         counter = counter + 1
         command_budget = COMMAND_LIMIT
 
@@ -251,7 +251,9 @@ end
 -- Grabs any nano in selection and stores it in the list
 function widget:SelectionChanged(selectedUnits)
     if is_play ~= false then return end
-    current_towers = {}
+    if flag_processed == true then -- remove old when processing is done, else append.
+        current_towers = {}
+    end
     for _, unitID in ipairs(selectedUnits) do
         local unitDefID = Spring.GetUnitDefID(unitID)
         if TURRETS[UnitDefs[unitDefID].name] then
@@ -265,9 +267,9 @@ function widget:UnitCommand(uID, _, _, _, _, _, _)
     if is_play ~= false then return end
     for _, nano in ipairs(current_towers) do
         if uID == nano then
-            listening = true
+            flag_listening = true
             counter = 0
-            processed = false
+            flag_processed = false
             break
         end
     end
