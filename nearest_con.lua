@@ -1,3 +1,16 @@
+-- Customize these if you want to change things. (You can hover over a unit and hold "I" key to see it's internal name):
+-- units on this list are ignored by the script.
+local exlude_names = {"armcom", "corcom", "legcom", "armrectr", "cornecro", "cormando", "corfast", "armfark", "armconsul", "corforge", "corvac"}
+-- Armada T1 and T2 constructors
+local arm_t1_names = {"armck", "armcv", "armch", "armca", "armcs", "armcsa", "armbeaver"}
+local arm_t2_names = {"armack", "armacv", "armaca", "armacsub"}
+-- Cortex T1 and T2 constructors
+local cor_t1_names = {"corck", "corcv", "corch", "corca", "corcs", "corcsa", "cormuskrat"}
+local cor_t2_names = {"corack", "coracv", "coraca", "coracsub"}
+-- Legion T1  and T2 constructors, may change; So if a legion change happens update these lists.
+local leg_t1_names = {"legck", "legcv", "corch", "legca", "corcs", "corcsa", "cormuskrat"} 
+local leg_t2_names = {"legack", "legaca", "legacv", "coracsub"}
+
 function widget:GetInfo()
     return {
         name = "Select nearest Constructor of type",
@@ -7,34 +20,23 @@ function widget:GetInfo()
         license = "GPL v3",
         layer = 0,
         enabled = true,
-		handler = true,
-        version = "1.0" --I may later add functioanlity to the option menu.
+        version = "1.1"
     }
 end
 
-local exlude_names = {"armcom", "corcom", "armrectr", "cornecro", "cormando", "corfast", "armfark", "armconsul"} -- units on this list are ignored by the script.
-local arm_t1_names = {'armck', 'armcv', 'armch', 'armca', 'armcs', 'armcsa', 'armbeaver'} -- Armada T1 constuctor names
-local cor_t1_names = {'corck', 'corcv', 'corch', 'corca', 'corcs', 'corcsa', 'cormuskrat'} -- Cortex T1 constructor names
-local arm_t2_names = {'armack', 'armacv', 'armaca', 'armacsub'} -- Armada T2
-local cor_t2_names = {'corack', 'coracv', 'coraca', 'coracsub'} -- Cortex T2
-local t1_names = {} -- init populated lists
+-- init populated tables, later set-likes
+local t1_names = {}
 local t2_names = {}
 
-function widget:Initialize()
-    t1_names = union(arm_t1_names, cor_t1_names)
-    t2_names = union(arm_t2_names, cor_t2_names)
-    make_set(exlude_names)
-    make_set(t1_names)
-    make_set(t2_names)
-
-	widgetHandler.actionHandler:AddAction(self, "select_nearest_t1_constructor", select_nearest_t1_constructor, nil, "p")
-	widgetHandler.actionHandler:AddAction(self, "select_nearest_t2_constructor", select_nearest_t2_constructor, nil, "p")
-	widgetHandler.actionHandler:AddAction(self, "select_all_constructors", select_all_constructors, nil, "p")
+local function vec_len(x,y,z) -- simple vector math
+    return math.sqrt(x*x+y*y+z*z)
 end
 
-function vec_len(x,y,z) return math.sqrt(x*x+y*y+z*z) end -- simple vector math
-function make_set(tab) for _, key in ipairs(tab) do tab[key] = true end end -- coverts a table to a Set()-like
-function union(t1,t2) -- unifies two table into one.
+local function make_set(tab) -- coverts a table to a Set()-like
+    for _, key in ipairs(tab) do tab[key] = true end
+end
+
+local function union(t1,t2) -- unifies two table into one.
     new = {}
     for i=1,#t1 do new[i] = t1[i] end
     offset = #new
@@ -42,9 +44,7 @@ function union(t1,t2) -- unifies two table into one.
     return new
 end
 
---- Get all qualifying constructors
--- Returns a table of all qualifying constructors.
-function get_all_cons()
+local function get_all_cons() -- Returns table of all constructors qualifing.
     us = Spring.GetTeamUnits(Spring.GetMyTeamID())
     local cons = {}
     if us == nil then return end
@@ -57,17 +57,14 @@ function get_all_cons()
     return cons
 end
 
-function get_mouse_pos()
+local function get_mouse_pos()
     x, y = Spring.GetMouseState()
     _, args = Spring.TraceScreenRay(x,y, true)
     if args == nil then return nil, nil, nil end
     return args[1], args[2], args[3]
 end
 
----  Find nearest constructor
--- Takes table of all counstructors and a kind table that will act as filter.
--- Returns the nearest unit of kind, nil if none.
-function find_nearest(t,kind)
+local function find_nearest(t,kind) -- Takes table of all counstructors and a kind table that will act as filter. Returns the nearest unit of kind, nil if none.
     m_x, m_y, m_z = get_mouse_pos()
     if m_x == nil then return end -- break if out of map
     distance = math.huge
@@ -83,17 +80,25 @@ function find_nearest(t,kind)
     return nearest_uID
 end
 
-function select_nearest_t1_constructor()
-	con = find_nearest(get_all_cons(), t1_names)
-	if con ~= nil then Spring.SelectUnit(con) end
+function widget:Initialize()
+    t1_names = union(arm_t1_names, cor_t1_names)
+    t2_names = union(arm_t2_names, cor_t2_names)
+    t1_names = union(t1_names, leg_t1_names)
+    t2_names = union(t2_names, leg_t2_names)
+    make_set(exlude_names)
+    make_set(t1_names)
+    make_set(t2_names)
 end
 
-function select_nearest_t2_constructor()
-	con = find_nearest(get_all_cons(), t2_names)
-	if con ~= nil then Spring.SelectUnit(con) end
-end
-
-function select_all_constructors()
-	cons = get_all_cons()
-	if cons ~= nil then Spring.SelectUnitArray(cons) end
+function widget:KeyPress(key, mods, isRepeating)
+    if key == 101 and mods.alt then --e+alt
+        cons = get_all_cons()
+        if cons ~= nil then Spring.SelectUnitArray(cons) end
+    elseif key ==  113 and mods.alt then --q+alt
+        con = find_nearest(get_all_cons(), t1_names)
+        if con ~= nil then Spring.SelectUnit(con) end
+    elseif key == 119 and mods.alt then --w+alt
+        con = find_nearest(get_all_cons(), t2_names)
+        if con ~= nil then Spring.SelectUnit(con) end
+    end
 end
