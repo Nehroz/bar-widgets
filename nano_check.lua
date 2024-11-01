@@ -97,7 +97,7 @@ local DELAY = 15
 -- names of nano turrets names -- TODO Needs Legion nano's too
 local TURRETS = {"armnanotc", "cornanotc", "armnanotct2", "cornanotct2"}
 -- Maximum number of commands to be flag_processed in a single frame; Game sim blocking if too many commands per frame.
--- Default is 20. But modern hardware could handle more. 20 is sufficent for any game case.
+-- Default is 20. But modern hardware could handle more. 20 is sufficient for any game case.
 local COMMAND_LIMIT = 20
 -- variables
 local is_play = false
@@ -144,7 +144,7 @@ end
 -- SECTION Main functions
 local function checkTurretRange(uID)
     local x, y, z = Spring.GetUnitPosition(uID)
-    local build_distance = Spring.GetUnitEffectiveBuildRange(uID, nil) -- Same as UnitDef.buildDistance; Not ambigous
+    local build_distance = Spring.GetUnitEffectiveBuildRange(uID, nil) -- Same as UnitDef.buildDistance; Not ambiguous
     local is_changed = false
     local is_first_cmd = true
     local cmds = Spring.GetUnitCommands(uID, -1)

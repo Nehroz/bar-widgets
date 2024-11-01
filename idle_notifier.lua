@@ -400,7 +400,7 @@ function widget:Initialize()
     widgetHandler.actionHandler:AddAction(self, "dismiss_idles", select_latest_idle_unit, nil, "p")
 end
 
-local function select_latest_idle_unit():
+local function select_latest_idle_unit()
     if #idles < 1 then return end
     local grp = idles[#idles]
     local pu = grp[1]
@@ -410,7 +410,7 @@ local function select_latest_idle_unit():
     Spring.SelectUnitArray(sgrp)
 end
 
-local function select_latest_idle_factory():
+local function select_latest_idle_factory()
     if factory_idle == false then return end
     if #idle_factoies < 1 then return end
     local u = idle_factoies[1]
@@ -418,7 +418,7 @@ local function select_latest_idle_factory():
     Spring.SelectUnitArray({u["uID"]})
 end
 
-local function dismiss_idles():
+local function dismiss_idles()
     idles = {}
     idle_factoies = {}
     first_warn = true
