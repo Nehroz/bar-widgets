@@ -1,0 +1,9 @@
+{
+    "hint.enable": true,
+    "Lua.diagnostics.globals": [
+        "widget",
+        "Spring",
+        "UnitDefs",
+        "widgetHandler"
+    ]
+}
